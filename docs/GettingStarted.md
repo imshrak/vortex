@@ -16,13 +16,14 @@ Library
 Load `Library.lua` once, create a window, then add tabs and groupboxes. A library instance manages one window. Use `Library:Unload()` when replacing it; load a fresh copy for another window. In Studio, `require` caches a ModuleScript's result, so a fresh client session or a cloned ModuleScript is needed after unloading.
 
 ```lua
+local state = { Enabled = false }
 local Window = Library:CreateWindow({ Title = "My interface" })
 local Main = Window:AddTab("Main", "rocket")
 local General = Main:AddGroupbox("General")
 local Enabled = General:AddToggle("Enabled", { Text = "Enabled", Default = false })
 
 Enabled:OnChanged(function(value)
-    print(value)
+    state.Enabled = value
 end)
 ```
 
@@ -100,21 +101,3 @@ SaveManager:SetStorage({
     end,
 })
 ```
-
-## Migrating UI from Rattex
-
-The library contains presentation and control state. Add game-specific behavior in your own callbacks. Original game modules, remotes, automation, webhook handling, and the Discord popup are outside this library.
-
-| Rattex helper | Vortex equivalent |
-| --- | --- |
-| `page(name)` | `Window:AddTab(name)` then `Tab:AddGroupbox("")` |
-| `toggle(content, title, key)` | `Group:AddToggle(key, { Text = title })` |
-| `action(content, title, callback)` | `Group:AddButton(title, callback)` |
-| `slider(content, title, key, min, max)` | `Group:AddSlider(key, { Text = title, Min = min, Max = max })` |
-| `inputField(...)` | `Group:AddInput(id, options)` |
-| `dropdown(...)` | `Group:AddDropdown(id, options)` |
-| `keybind(...)` | `Group:AddKeyPicker(id, options)` |
-| `state:ToggleMenu()` | `Window:Toggle()` |
-| `state:Destroy()` | `Library:Unload()` |
-
-Vortex supports the documented API. It does not implement every Obsidian option or provide full drop-in compatibility.

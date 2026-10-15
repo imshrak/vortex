@@ -43,10 +43,10 @@ Both `Save = false` and manager exclusions prevent writing and importing the con
 
 ```lua
 local exported, json = SaveManager:Export()
+local imported, err
 if exported then
-    print(json)
+    imported, err = SaveManager:Import(json)
 end
-local imported, err = SaveManager:Import(json)
 ```
 
 Export builds a JSON string from current controls without accessing files. Import reads that string without a storage adapter. This supports custom clipboard buttons, text editors, or an application-specific storage service. Neither method sends data anywhere.

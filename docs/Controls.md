@@ -5,6 +5,7 @@
 ## Common options
 
 ```lua
+local state = { Enabled = false }
 local Enabled = Group:AddToggle("Enabled", {
     Text = "Enabled",
     Default = false,
@@ -13,7 +14,7 @@ local Enabled = Group:AddToggle("Enabled", {
     Tooltip = "Enable this option.",
     DisabledTooltip = "This option is currently unavailable.",
     Save = true,
-    Callback = function(value) print(value) end,
+    Callback = function(value) state.Enabled = value end,
 })
 ```
 
@@ -33,7 +34,7 @@ Check boxes and toggles live in `Library.Toggles`. Inputs, sliders, dropdowns, k
 ## Shared methods
 
 ```lua
-Enabled:OnChanged(function(value) print(value) end)
+Enabled:OnChanged(function(value) state.Enabled = value end)
 Enabled:SetValue(true)
 Enabled:SetValue(false, true)
 Enabled:SetText("New label")
@@ -62,7 +63,7 @@ Both store booleans and share config behavior. Checkboxes use a compact square i
 ## Buttons and confirmation
 
 ```lua
-Group:AddButton("Run action", function() print("Pressed") end)
+Group:AddButton("Reset settings", function() Library:ResetAll() end)
 Group:AddButton({
     Text = "Reset settings",
     DoubleClick = true,

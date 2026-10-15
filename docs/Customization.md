@@ -77,12 +77,9 @@ Window:Toggle(true)
 Size setters clamp to `MinSize`/`MaxSize` and reflow groups and nested controls. `SetScale` accepts a number greater than zero and at most three. `Toggle()` with no argument toggles visibility; a boolean forces a state.
 
 ```lua
-Window:OnResize(function(size)
-    print("Size:", size.X, size.Y)
-end)
-Window:OnToggle(function(visible)
-    print("Visible:", visible)
-end)
+local windowSize, menuVisible = Vector2.new(640, 500), true
+Window:OnResize(function(size) windowSize = size end)
+Window:OnToggle(function(visible) menuVisible = visible end)
 ```
 
 Other window methods are [listed in the API reference](API.md#window). One library instance manages one window. Load a fresh library instance after unloading; Studio's `require` cache is discussed in [getting started](GettingStarted.md).

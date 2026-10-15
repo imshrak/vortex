@@ -11,8 +11,7 @@ environment.VortexExample = Library
 
 local Window = Library:CreateWindow({
     Title = "vortex",
-    Subtitle = "customization example",
-    Footer = "v" .. Library.Version,
+    Subtitle = "by shrak.",
     Size = Vector2.new(640, 500),
     MinSize = Vector2.new(480, 360),
     MaxSize = Vector2.new(1100, 800),
@@ -27,14 +26,7 @@ local Appearance = Window:AddTab("Appearance", "plus")
 local Settings = Window:AddTab("Settings", "gear")
 
 local General = Overview:AddGroupbox("")
-General:AddParagraph({
-    Title = "Build your own menu",
-    Content = "Use your own tabs, controls, callbacks, and branding. Drag the lower-right handle to resize this example.",
-})
-local Enabled = General:AddToggle(
-    "AdvancedEnabled",
-    { Text = "Enable adjustments", Default = true, Tooltip = "Controls can depend on other control values." }
-)
+local Enabled = General:AddToggle("AdvancedEnabled", { Text = "Enable adjustments", Default = true })
 General:AddSlider("AdvancedAmount", {
     Text = "Amount",
     Min = 0,
@@ -45,15 +37,15 @@ General:AddSlider("AdvancedAmount", {
     Suffix = "x",
     DisabledTooltip = "Enable adjustments first.",
 }):DependsOn({ { Enabled, true } }, "Disabled")
-General:AddButton("Open dialog", function()
+General:AddButton("Reset settings", function()
     Library:Dialog({
-        Title = "Your action",
-        Content = "Dialogs support your own labels and callbacks.",
+        Title = "Reset settings?",
+        Content = "Restore control defaults.",
         Buttons = {
             {
-                Text = "Continue",
+                Text = "Reset",
                 Callback = function()
-                    Library:Notify("Action confirmed")
+                    Library:ResetAll({ "VortexConfigName", "VortexConfigList" })
                 end,
             },
             { Text = "Cancel" },
@@ -61,12 +53,9 @@ General:AddButton("Open dialog", function()
     })
 end)
 General:AddKeyPicker("AdvancedAction", {
-    Text = "Demo keybind",
+    Text = "Action key",
     Default = "F6",
     Mode = "Toggle",
-    Callback = function(active)
-        Library:Notify(active and "Action active" or "Action inactive")
-    end,
 })
 General:AddCheckbox("AdvancedKeybinds", {
     Text = "Show keybind overlay",
@@ -88,7 +77,6 @@ General:AddCheckbox("AdvancedWatermark", {
 local Fields = Controls:AddGroupbox({
     Name = "Fields",
     ShowTitle = true,
-    Description = "Validation, stable IDs, and multiline input",
 })
 Fields:AddInput("AdvancedName", {
     Text = "Name",
@@ -114,10 +102,7 @@ Fields:AddDropdown("AdvancedFilters", {
     Multi = true,
     Searchable = true,
 })
-Fields:AddInput(
-    "AdvancedNote",
-    { Text = "Notes", Default = "Write a note here.", Multiline = true, Height = 104, MaxLength = 500 }
-)
+Fields:AddInput("AdvancedNote", { Text = "Notes", Default = "", Multiline = true, Height = 104, MaxLength = 500 })
 Fields:AddColorPicker(
     "AdvancedColor",
     { Text = "Highlight", Default = Color3.fromRGB(150, 190, 255), Transparency = 0 }
@@ -140,7 +125,6 @@ local Collapsible = Layout:AddGroupbox({
     Collapsed = true,
     MinHeight = 42,
 })
-Collapsible:AddLabel("Collapsed groups keep the page compact.", true)
 Collapsible:AddToggle("AdvancedExtra", { Text = "Extra option", Default = false })
 
 ThemeManager:SetLibrary(Library)
@@ -216,8 +200,5 @@ Transfer:AddButton("Unload", function()
     Library:Unload()
 end)
 
-Window:OnResize(function(size)
-    Window:SetFooter(string.format("%d × %d", size.X, size.Y))
-end)
 Overview:Select()
 return Library

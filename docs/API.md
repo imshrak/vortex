@@ -111,8 +111,8 @@ Callbacks run through `task.spawn` with protected error handling. Changes to the
 
 ```lua
 Group:AddToggle("Enabled", { Text = "Enabled", Default = false })
-Group:AddButton("Run action", function() print("Pressed") end)
-Group:AddButton({ Text = "Run action", Func = function() print("Pressed") end })
+Group:AddButton("Reset settings", function() Library:ResetAll() end)
+Group:AddButton({ Text = "Reset settings", Func = function() Library:ResetAll() end })
 ```
 
 Toggles store booleans in `Library.Toggles`. `AddCheckbox` uses the same boolean API with a square indicator. Buttons are unindexed and expose `Press()` and `Button`; `DoubleClick = true` requires a second click within three seconds.
@@ -156,13 +156,14 @@ Group:AddDropdown("Filters", {
 ## Key pickers
 
 ```lua
+local state = { Active = false, Key = "F" }
 local Key = Group:AddKeyPicker("ActionKey", {
     Text = "Action key", Default = "F", Mode = "Toggle",
-    Callback = function(active) print(active) end,
-    ChangedCallback = function(key) print("Bound to", key) end,
+    Callback = function(active) state.Active = active end,
+    ChangedCallback = function(key) state.Key = key end,
 })
-Key:OnClick(function(active) print(active) end)
-Key:OnChanged(function(key) print(key) end)
+Key:OnClick(function(active) state.Active = active end)
+Key:OnChanged(function(key) state.Key = key end)
 Key:SetValue({ "G", "Hold" })
 ```
 
