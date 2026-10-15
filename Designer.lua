@@ -2,10 +2,11 @@ local Players = game:GetService("Players")
 local UIS = game:GetService("UserInputService")
 local HttpService = game:GetService("HttpService")
 local TweenService = game:GetService("TweenService")
+local RunService = game:GetService("RunService")
 
 local Designer = {}
 Designer.__index = Designer
-Designer.Version = "1.1.0"
+Designer.Version = "1.2.0"
 
 local palette = {
     Background = Color3.fromRGB(15, 15, 15),
@@ -288,6 +289,12 @@ local function icon(parent, name, position, color)
         line(5, 14, 2, 11)
         line(2, 4, 3, 7)
         line(3, 7, 6, 6)
+    elseif name == "Grip" then
+        for _, x in ipairs({ 5, 11 }) do
+            for _, y in ipairs({ 3, 8, 13 }) do
+                dot(x, y, 0.8)
+            end
+        end
     elseif name == "Vortex" then
         line(2, 3, 8, 13, 2)
         line(8, 13, 14, 3, 2)
@@ -309,8 +316,6 @@ local iconNames = {
     ["−"] = "Minimize",
     ["×"] = "Close",
     ["✓"] = "Check",
-    ["Move up"] = "Up",
-    ["Move down"] = "Down",
     ["Reset view"] = "Reset",
     ["Save file"] = "Save",
     ["Load file"] = "Open",
@@ -321,12 +326,14 @@ local iconNames = {
 
 local function setSelected(object, selected)
     object:SetAttribute("Selected", selected == true)
+    local hovered = object:GetAttribute("Hovered") == true
     animate(object, {
-        BackgroundColor3 = selected and palette.Selected
+        BackgroundColor3 = hovered and palette.Hover
+            or selected and not object:GetAttribute("HoverOnly") and palette.Selected
             or object:GetAttribute("Flat") and palette.Surface
             or palette.Field,
         TextColor3 = selected and palette.Accent or palette.Muted,
-        BackgroundTransparency = object:GetAttribute("Quiet") and not selected and 1 or 0,
+        BackgroundTransparency = object:GetAttribute("Quiet") and not selected and not hovered and 1 or 0,
     })
 end
 
@@ -416,12 +423,14 @@ local function button(parent, caption, position, size, callback, accent, iconNam
     end
     corner(object, (caption == "−" or caption == "×") and 14 or 6)
     object.MouseEnter:Connect(function()
+        object:SetAttribute("Hovered", true)
         animate(object, { BackgroundColor3 = palette.Hover, TextColor3 = palette.Accent, BackgroundTransparency = 0 })
         if tooltip then
             tooltip.Visible = true
         end
     end)
     object.MouseLeave:Connect(function()
+        object:SetAttribute("Hovered", false)
         setSelected(object, object:GetAttribute("Selected"))
         if tooltip then
             tooltip.Visible = false
@@ -579,17 +588,233 @@ function Designer:Redo()
     end
 end
 
-function Designer:_moveBy(delta)
-    local node, list, index = self.Model:Get(self.Model.Selection)
-    local target = list and list[index + delta]
-    if node and target then
-        self:_apply(self.Model:Move(node.Key, target.Key, delta > 0))
+local function visibleAt(point, object, boundary)
+    if not object.Parent or not inside(point, object) then
+        return false
+    end
+    local parent = object.Parent
+    while parent and parent ~= boundary do
+        if
+            parent:IsA("GuiObject") and (not parent.Visible or parent.ClipsDescendants and not inside(point, parent))
+        then
+            return false
+        end
+        parent = parent.Parent
+    end
+    return parent == boundary
+end
+
+function Designer:_previewHit(point)
+    if not visibleAt(point, self.Stage, self.Root) then
+        return nil
+    end
+    if
+        self.PreviewWindow
+        and self.PreviewWindow.GlobalSettings.Visible
+        and visibleAt(point, self.PreviewWindow.GlobalSettings, self.Root)
+    then
+        return nil
+    end
+    local best
+    for _, candidate in ipairs(self.HoverCandidates or {}) do
+        if
+            (not best or candidate.Depth > best.Depth)
+            and (
+                visibleAt(point, candidate.Object, self.Root)
+                or candidate.Handle and visibleAt(point, candidate.Handle, self.Root)
+            )
+        then
+            best = candidate
+        end
+    end
+    return best
+end
+
+function Designer:_highlight(point)
+    local candidate
+    if not self.Testing and not self.Modal and self.Root.Visible and not self.Closing then
+        candidate = self:_previewHit(point or UIS:GetMouseLocation())
+    end
+    local hovered = candidate and candidate.Key or nil
+    if self.Drag and self.Drag.Active and hovered == self.Drag.Key then
+        hovered = nil
+    end
+    self.HoverKey = hovered
+    for key, selection in pairs(self.SelectionOutlines or {}) do
+        selection.Enabled = key == hovered
     end
 end
 
-function Designer:_highlight()
-    for key, selection in pairs(self.SelectionOutlines or {}) do
-        selection.Enabled = not self.Testing and key == self.Model.Selection
+function Designer:_beginItemDrag(key, event)
+    if self.Testing or self.Modal or self.Closing or self.WindowDrag or self.Drag then
+        return
+    end
+    if event.UserInputType ~= Enum.UserInputType.MouseButton1 and event.UserInputType ~= Enum.UserInputType.Touch then
+        return
+    end
+    if key == "window" or not self.Model:Get(key) then
+        return
+    end
+    self.Drag = { Key = key, Start = event.Position, Position = event.Position, Input = event, Active = false }
+end
+
+function Designer:_findDrop(point)
+    local drag = self.Drag
+    if not drag then
+        return nil
+    end
+    local candidate
+    if visibleAt(point, self.Tree, self.Root) then
+        for _, row in ipairs(self.TreeRows) do
+            if visibleAt(point, row.Object, self.Root) then
+                candidate = { Key = row.Key, Object = row.Object }
+                break
+            end
+        end
+    else
+        candidate = self:_previewHit(point)
+    end
+    if not candidate or not self.Model:CanMove(drag.Key, candidate.Key) then
+        return nil
+    end
+    local node, source = self.Model:Get(drag.Key), self.Model:Get(candidate.Key)
+    local append = source.Kind == "Group" and node.Kind ~= "Group" or source.Kind == "Tab" and node.Kind == "Group"
+    return {
+        Key = candidate.Key,
+        Object = candidate.Object,
+        Append = append,
+        Horizontal = candidate.Horizontal and not append,
+        After = not append
+            and (
+                candidate.Horizontal
+                    and point.X > candidate.Object.AbsolutePosition.X + candidate.Object.AbsoluteSize.X / 2
+                or not candidate.Horizontal
+                    and point.Y > candidate.Object.AbsolutePosition.Y + candidate.Object.AbsoluteSize.Y / 2
+            ),
+    }
+end
+
+function Designer:_updateItemDrag(event)
+    local drag = self.Drag
+    if
+        not drag
+        or not (
+            event == drag.Input
+            or drag.Input.UserInputType == Enum.UserInputType.MouseButton1
+                and event.UserInputType == Enum.UserInputType.MouseMovement
+        )
+    then
+        return
+    end
+    drag.Position = event.Position
+    if
+        not drag.Active
+        and (Vector2.new(event.Position.X, event.Position.Y) - Vector2.new(drag.Start.X, drag.Start.Y)).Magnitude
+            > 7
+    then
+        drag.Active = true
+        self.Model.Selection = drag.Key
+        self:RenderInspector()
+        if self.PreviewLibrary._capture then
+            self.PreviewLibrary._capture.Button.Text = self.PreviewLibrary._capture.Value
+            self.PreviewLibrary._capture = nil
+        end
+    end
+    if not drag.Active then
+        return
+    end
+    local node = self.Model:Get(drag.Key)
+    self.DragLabel.Visible, self.DragLabel.Text = true, "  " .. (node.Text or node.Name or node.Kind)
+    self.DragLabel.Position = UDim2.fromOffset(
+        (event.Position.X - self.Root.AbsolutePosition.X) / self.Scale.Scale + 12,
+        (event.Position.Y - self.Root.AbsolutePosition.Y) / self.Scale.Scale + 12
+    )
+    self.DropTarget = self:_findDrop(event.Position)
+    self.DropIndicator.Visible = self.DropTarget ~= nil
+    if self.DropTarget then
+        local target = self.DropTarget
+        local origin, size = target.Object.AbsolutePosition, target.Object.AbsoluteSize
+        local x = origin.X + (target.Horizontal and target.After and size.X or 0)
+        local y = target.Horizontal and origin.Y
+            or target.Append and origin.Y + size.Y - 3
+            or origin.Y + (target.After and size.Y or 0)
+        self.DropIndicator.Position = UDim2.fromOffset(
+            (x - self.Root.AbsolutePosition.X) / self.Scale.Scale,
+            (y - self.Root.AbsolutePosition.Y) / self.Scale.Scale
+        )
+        self.DropIndicator.Size = target.Horizontal and UDim2.fromOffset(2, size.Y / self.Scale.Scale)
+            or UDim2.fromOffset(size.X / self.Scale.Scale, 2)
+    end
+    self:_highlight(event.Position)
+end
+
+function Designer:_scrollItemDrag(deltaTime)
+    local drag = self.Drag
+    if not drag or not drag.Active then
+        return
+    end
+    local scrolling = visibleAt(drag.Position, self.Tree, self.Root) and self.Tree or nil
+    if not scrolling and self.PreviewWindow then
+        local tab = self.PreviewWindow.Tabs[self.PreviewWindow.SelectedTab]
+        if tab and visibleAt(drag.Position, tab.Frame, self.Root) then
+            scrolling = tab.Frame
+        end
+    end
+    if not scrolling then
+        return
+    end
+    local origin, size = scrolling.AbsolutePosition, scrolling.AbsoluteSize
+    local direction = drag.Position.Y < origin.Y + 24 and -1 or drag.Position.Y > origin.Y + size.Y - 24 and 1 or 0
+    if direction == 0 then
+        return
+    end
+    local current = scrolling.CanvasPosition
+    local position = math.clamp(
+        current.Y + direction * 260 * math.min(deltaTime or 1 / 60, 0.05),
+        0,
+        math.max(0, scrolling.AbsoluteCanvasSize.Y - size.Y)
+    )
+    if position ~= current.Y then
+        scrolling.CanvasPosition = Vector2.new(current.X, position)
+        self:_updateItemDrag(
+            drag.Input.UserInputType == Enum.UserInputType.Touch and drag.Input
+                or { UserInputType = Enum.UserInputType.MouseMovement, Position = drag.Position }
+        )
+    end
+end
+
+function Designer:_endItemDrag(event)
+    local drag = self.Drag
+    if
+        not drag
+        or not (
+            event == drag.Input
+            or event.UserInputType == Enum.UserInputType.MouseButton1
+                and drag.Input.UserInputType == Enum.UserInputType.MouseButton1
+        )
+    then
+        return
+    end
+    local target = drag.Active and self:_findDrop(drag.Position) or nil
+    self.Drag, self.DropTarget, self.DragLabel.Visible, self.DropIndicator.Visible = nil, nil, false, false
+    if drag.Active then
+        self.SuppressClickUntil = os.clock() + 0.3
+        if target then
+            self:_apply(self.Model:Move(drag.Key, target.Key, target.After))
+        else
+            self:Select(drag.Key)
+        end
+    end
+    self:_highlight()
+end
+
+function Designer:_cancelItemDrag()
+    self.Drag, self.DropTarget = nil, nil
+    if self.DragLabel then
+        self.DragLabel.Visible = false
+    end
+    if self.DropIndicator then
+        self.DropIndicator.Visible = false
     end
 end
 
@@ -603,6 +828,7 @@ function Designer:RenderOutline()
         local object = button(self.Tree, "", UDim2.fromOffset(8, y), UDim2.new(1, -19, 0, 30), nil)
         object.Name = "Item_" .. key
         object:SetAttribute("Flat", true)
+        object:SetAttribute("HoverOnly", true)
         setSelected(object, selected)
         icon(object, kind, UDim2.fromOffset(8 + depth * 13, 7), selected and palette.Accent or palette.Muted)
         text(
@@ -619,15 +845,7 @@ function Designer:RenderOutline()
             end
         end)
         object.InputBegan:Connect(function(event)
-            if
-                key ~= "window"
-                and (
-                    event.UserInputType == Enum.UserInputType.MouseButton1
-                    or event.UserInputType == Enum.UserInputType.Touch
-                )
-            then
-                self.Drag = { Key = key, Start = event.Position, Input = event, Active = false }
-            end
+            self:_beginItemDrag(key, event)
         end)
         y += 32
     end
@@ -779,13 +997,6 @@ function Designer:RenderInspector()
             self:Delete()
         end)
         y += 46
-        button(self.Properties, "Move up", UDim2.fromOffset(14, y), UDim2.new(0.5, -20, 0, 30), function()
-            self:_moveBy(-1)
-        end)
-        button(self.Properties, "Move down", UDim2.new(0.5, 3, 0, y), UDim2.new(0.5, -20, 0, 30), function()
-            self:_moveBy(1)
-        end)
-        y += 42
     end
     frame(self.Properties, "Extent", UDim2.fromOffset(0, y), UDim2.fromOffset(1, 1), palette.Surface).BackgroundTransparency =
         1
@@ -834,7 +1045,7 @@ function Designer:RenderPreview()
         self:_status(tostring(window), true)
         return
     end
-    self.PreviewWindow, self.PreviewObjects, self.SelectionOutlines = window, objects, {}
+    self.PreviewWindow, self.PreviewObjects, self.SelectionOutlines, self.HoverCandidates = window, objects, {}, {}
     window.Frame.Parent = self.Stage
     window.Gui.Enabled = false
     window._fit = function()
@@ -856,55 +1067,99 @@ function Designer:RenderPreview()
             end)
         end
     end)
-    local function selectable(key, object, hit)
+    local function selectable(key, object, depth, draggable)
         self.SelectionOutlines[key] = make("UIStroke", {
-            Name = "DesignerSelection",
+            Name = "DesignerHover",
             Color = palette.Accent,
             Thickness = 1,
             ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
             Enabled = false,
         }, object)
-        if hit then
-            local overlay = make("TextButton", {
-                Name = "DesignerSelect",
+        local candidate = { Key = key, Object = object, Depth = depth }
+        table.insert(self.HoverCandidates, candidate)
+        object.InputBegan:Connect(function(event)
+            if self.Testing or self.Drag and self.Drag.Active then
+                return
+            end
+            if
+                event.UserInputType ~= Enum.UserInputType.MouseButton1
+                and event.UserInputType ~= Enum.UserInputType.Touch
+            then
+                return
+            end
+            local hit = self:_previewHit(event.Position)
+            if hit and hit.Key == key then
+                self:Select(key)
+            end
+        end)
+        if draggable then
+            local handle = make("TextButton", {
+                Name = "DesignerGrip",
                 Text = "",
                 AutoButtonColor = false,
                 BackgroundTransparency = 1,
-                Size = UDim2.fromScale(1, 1),
+                BorderSizePixel = 0,
+                Position = depth == 3 and UDim2.new(0, -15, 0.5, -11) or UDim2.fromOffset(0, 9),
+                Size = UDim2.fromOffset(12, 22),
                 ZIndex = 80,
+                Visible = not self.Testing,
             }, object)
-            overlay.Visible = not self.Testing
-            overlay.Activated:Connect(function()
-                self:Select(key)
+            candidate.Handle = handle
+            local glyph = icon(handle, "Grip", UDim2.fromOffset(-2, 3), palette.Muted)
+            glyph.Active = false
+            handle.InputBegan:Connect(function(event)
+                self:_beginItemDrag(key, event)
+            end)
+            handle.Activated:Connect(function()
+                if os.clock() >= self.SuppressClickUntil then
+                    self:Select(key)
+                end
             end)
         end
+        return candidate
     end
-    selectable("window", window.Frame, false)
-    local header = window.Frame:FindFirstChild("Header")
-    if header then
-        local hit = make("TextButton", {
-            Name = "DesignerHeader",
-            Text = "",
-            AutoButtonColor = false,
-            BackgroundTransparency = 1,
-            Size = UDim2.fromScale(1, 1),
-            ZIndex = 80,
-            Visible = not self.Testing,
-        }, header)
-        hit.Activated:Connect(function()
-            self:Select("window")
+    selectable("window", window.Frame, 1, false)
+    for _, member in ipairs({ "CloseButton", "MinimizeButton" }) do
+        local original = window[member]
+        local sample = original:Clone()
+        sample.Parent = original.Parent
+        original:Destroy()
+        window[member] = sample
+        sample.MouseEnter:Connect(function()
+            animate(sample, { BackgroundTransparency = 0.25 })
+        end)
+        sample.MouseLeave:Connect(function()
+            animate(sample, { BackgroundTransparency = 1 })
+        end)
+        sample.Activated:Connect(function()
+            if not self.Testing then
+                self:Select("window")
+            end
         end)
     end
     for _, tab in ipairs(self.Model.Data.Tabs) do
         local tabObject = objects[tab.Key]
+        local tabCandidate = selectable(tab.Key, tabObject.Button, 2, false)
+        tabCandidate.Horizontal = true
         tabObject.Button.Activated:Connect(function()
-            self:Select(tab.Key)
+            self.ActiveTab = tab.Key
+            if not self.Testing then
+                self:Select(tab.Key)
+            end
         end)
         for _, group in ipairs(tab.Groups) do
             local groupObject = objects[group.Key]
-            selectable(group.Key, groupObject.Frame, false)
+            selectable(group.Key, groupObject.Frame, 2, group.ShowTitle or group.Collapsible)
             for _, control in ipairs(group.Controls) do
-                selectable(control.Key, objects[control.Key].Frame, true)
+                local preview = objects[control.Key]
+                selectable(control.Key, preview.Frame, 3, true)
+                if preview.Button then
+                    preview.Button.Activated:Connect(function()
+                        if not self.Testing then
+                            self:Select(control.Key)
+                        end
+                    end)
+                end
             end
         end
     end
@@ -928,6 +1183,7 @@ function Designer:RenderPreview()
 end
 
 function Designer:Render()
+    self:_cancelItemDrag()
     self:RenderOutline()
     self:RenderInspector()
     self:RenderPreview()
@@ -935,6 +1191,7 @@ function Designer:Render()
 end
 
 function Designer:SetTesting(value)
+    self:_cancelItemDrag()
     self.Testing = value == true
     self.TestButton.Text = self.Testing and "Editing" or "Preview"
     setSelected(self.TestButton, self.Testing)
@@ -974,6 +1231,7 @@ function Designer:_closeModal()
 end
 
 function Designer:_modal(title)
+    self:_cancelItemDrag()
     self:_closeModal()
     local overlay = make("TextButton", {
         Name = "Modal",
@@ -1232,6 +1490,7 @@ function Designer:Minimize()
     self.VisibilityToken += 1
     local token = self.VisibilityToken
     self.WindowDrag = nil
+    self:_cancelItemDrag()
     cancelMotion(self.Root, "Position")
     self.HiddenPosition = self.Root.Position
     animate(self.Root, { GroupTransparency = 1 }, 0.12)
@@ -1431,101 +1690,40 @@ function Designer:_buildUI(parent)
     self.DragLabel.BackgroundColor3, self.DragLabel.BackgroundTransparency = palette.Selected, 0.05
     self.DragLabel.Visible, self.DragLabel.ZIndex = false, 90
     corner(self.DragLabel, 5)
+    self.DropIndicator = frame(self.Root, "DropIndicator", UDim2.new(), UDim2.fromOffset(0, 2), palette.Accent)
+    self.DropIndicator.Visible, self.DropIndicator.ZIndex = false, 95
+    corner(self.DropIndicator, 1)
+    self:_connect(RunService.RenderStepped, function(deltaTime)
+        self:_scrollItemDrag(deltaTime)
+        self:_highlight()
+    end)
     self:_connect(UIS.InputChanged, function(event)
         self:_moveWindowDrag(event)
-        local drag = self.Drag
-        if
-            not drag
-            or not (
-                event == drag.Input
-                or event.UserInputType == Enum.UserInputType.MouseMovement
-                    and drag.Input.UserInputType == Enum.UserInputType.MouseButton1
-            )
-        then
-            return
-        end
-        if
-            (Vector2.new(event.Position.X, event.Position.Y) - Vector2.new(drag.Start.X, drag.Start.Y)).Magnitude > 7
-        then
-            drag.Active = true
-        end
-        if drag.Active then
-            drag.Position = event.Position
-            local node = self.Model:Get(drag.Key)
-            self.DragLabel.Visible, self.DragLabel.Text = true, "  " .. (node.Text or node.Name or node.Kind)
-            self.DragLabel.Position = UDim2.fromOffset(
-                (event.Position.X - self.Root.AbsolutePosition.X) / self.Scale.Scale + 12,
-                (event.Position.Y - self.Root.AbsolutePosition.Y) / self.Scale.Scale + 12
-            )
-            for _, row in ipairs(self.TreeRows) do
-                row.Object.BackgroundColor3 = inside(event.Position, row.Object)
-                        and row.Key ~= drag.Key
-                        and palette.Selected
-                    or row.Key == self.Model.Selection and palette.Selected
-                    or palette.Surface
-            end
-            if inside(event.Position, self.Tree) then
-                local position, size = self.Tree.AbsolutePosition, self.Tree.AbsoluteSize
-                local delta = event.Position.Y < position.Y + 30 and -10
-                    or event.Position.Y > position.Y + size.Y - 30 and 10
-                    or 0
-                self.Tree.CanvasPosition = Vector2.new(
-                    0,
-                    math.clamp(
-                        self.Tree.CanvasPosition.Y + delta,
-                        0,
-                        math.max(0, self.Tree.AbsoluteCanvasSize.Y - size.Y)
-                    )
-                )
-            end
-        end
+        self:_updateItemDrag(event)
     end)
     self:_connect(UIS.InputEnded, function(event)
-        local windowDrag = self.WindowDrag
+        local drag = self.WindowDrag
         if
-            windowDrag
+            drag
             and (
-                event == windowDrag.Input
+                event == drag.Input
                 or event.UserInputType == Enum.UserInputType.MouseButton1
-                    and windowDrag.Input.UserInputType == Enum.UserInputType.MouseButton1
+                    and drag.Input.UserInputType == Enum.UserInputType.MouseButton1
             )
         then
             self.WindowDrag = nil
         end
-        local drag = self.Drag
-        if
-            not drag
-            or not (
-                event == drag.Input
-                or event.UserInputType == Enum.UserInputType.MouseButton1
-                    and drag.Input.UserInputType == Enum.UserInputType.MouseButton1
-            )
-        then
-            return
-        end
-        self.Drag, self.DragLabel.Visible = nil, false
-        if drag.Active then
-            self.SuppressClickUntil = os.clock() + 0.3
-            local point = drag.Position or event.Position
-            if inside(point, self.Tree) then
-                for _, row in ipairs(self.TreeRows) do
-                    if row.Key ~= drag.Key and inside(point, row.Object) then
-                        self:_apply(
-                            self.Model:Move(
-                                drag.Key,
-                                row.Key,
-                                point.Y > row.Object.AbsolutePosition.Y + row.Object.AbsoluteSize.Y / 2
-                            )
-                        )
-                        return
-                    end
-                end
-            end
-            self:RenderOutline()
-        end
+        self:_endItemDrag(event)
     end)
     self:_connect(UIS.InputBegan, function(event, processed)
         if processed or not self.Root.Visible or UIS:GetFocusedTextBox() then
+            return
+        end
+        if self.PreviewLibrary and self.PreviewLibrary._capture then
+            return
+        end
+        if self.Drag and event.KeyCode == Enum.KeyCode.Escape then
+            self:_cancelItemDrag()
             return
         end
         if self.Modal then

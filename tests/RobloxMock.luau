@@ -152,7 +152,7 @@ end
 local instanceMethods = {}
 local function guiClass(class)
     return table.find(
-        { "Frame", "TextLabel", "TextButton", "TextBox", "ImageLabel", "ImageButton", "ScrollingFrame" },
+        { "Frame", "CanvasGroup", "TextLabel", "TextButton", "TextBox", "ImageLabel", "ImageButton", "ScrollingFrame" },
         class
     ) ~= nil
 end
@@ -221,6 +221,8 @@ function Instance.new(class)
         Size = UDim2.new(),
         AbsoluteSize = Vector2.new(1280, 720),
         AbsolutePosition = Vector2.new(0, 0),
+        CanvasPosition = Vector2.new(0, 0),
+        AbsoluteCanvasSize = Vector2.new(0, 0),
         BackgroundColor3 = Color3.new(1, 1, 1),
         BackgroundTransparency = 0,
         Visible = true,
@@ -262,6 +264,19 @@ function Instance.new(class)
     })
 end
 
+function instanceMethods:Clone()
+    local object = Instance.new(self.ClassName)
+    for key, value in pairs(self._properties) do
+        if key ~= "Parent" and not (type(value) == "table" and type(value.Connect) == "function") then
+            object[key] = value
+        end
+    end
+    for _, child in ipairs(self:GetChildren()) do
+        child:Clone().Parent = object
+    end
+    return object
+end
+
 local jsonValues, jsonSequence = {}, 0
 local HttpService = {}
 function HttpService:JSONEncode(value)
@@ -275,6 +290,9 @@ function HttpService:JSONDecode(value)
     return jsonValues[value]
 end
 local UIS = { InputBegan = signal(), InputChanged = signal(), InputEnded = signal() }
+function UIS:GetMouseLocation()
+    return self.MouseLocation or Vector2.new(-100, -100)
+end
 function UIS:GetFocusedTextBox()
     return self.FocusedTextBox
 end
@@ -291,6 +309,7 @@ local services = {
         },
     },
     UserInputService = UIS,
+    RunService = { RenderStepped = signal() },
     CoreGui = Instance.new("CoreGui"),
     TweenService = {
         Create = function(_, target, _, properties)

@@ -509,6 +509,22 @@ function Project:Duplicate(key)
     end)
 end
 
+function Project:CanMove(key, targetKey)
+    local node, source = self:Get(key)
+    local target = self:Get(targetKey)
+    if not source or not target or key == targetKey then
+        return false
+    end
+    if node.Kind == "Tab" then
+        return target.Kind == "Tab"
+    end
+    if node.Kind == "Group" then
+        return target.Kind == "Tab" or target.Kind == "Group"
+    end
+    return table.find(Project.Kinds, node.Kind) ~= nil
+        and (target.Kind == "Group" or table.find(Project.Kinds, target.Kind) ~= nil)
+end
+
 function Project:Move(key, targetKey, after)
     return self:_commit(function(data)
         local node, source, sourceIndex = self:Get(key, data)

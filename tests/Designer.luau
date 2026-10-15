@@ -183,15 +183,113 @@ editor:Add("Checkbox")
 verify(oldPreview.Unloaded and oldFrame.Destroyed, "Refreshing should clean up the previous preview")
 editor:Undo()
 verify(editor.Model:Get("n3").Text == "Custom toggle", "Editor undo should preserve previous edits")
+verify(
+    editor.PreviewObjects.n3.Frame:FindFirstChild("DesignerSelect") == nil,
+    "Controls must not have a click-blocking overlay"
+)
+editor.PreviewObjects.n3.Button.Activated:Fire()
+verify(
+    editor.PreviewObjects.n3.Value == true and editor.Model:Get("n3").Default == false,
+    "Editing mode should allow transient toggle interaction"
+)
+local preview = editor.PreviewLibrary
+editor.PreviewWindow.CloseButton.Activated:Fire()
+editor.PreviewWindow.MinimizeButton.Activated:Fire()
+verify(
+    not preview.Unloaded and editor.PreviewWindow.Frame.Visible,
+    "Preview header buttons must not close or hide the menu"
+)
+verify(
+    editor.Properties:FindFirstChild("Move up") == nil and editor.Properties:FindFirstChild("Move down") == nil,
+    "Layout should use drag handles instead of move buttons"
+)
+
+editor.Stage.AbsolutePosition, editor.Stage.AbsoluteSize = Vector2.new(250, 100), Vector2.new(756, 612)
+editor.Tree.AbsolutePosition, editor.Tree.AbsoluteSize = Vector2.new(12, 100), Vector2.new(214, 400)
+for _, candidate in ipairs(editor.HoverCandidates) do
+    candidate.Object.AbsolutePosition, candidate.Object.AbsoluteSize = Vector2.new(-2000, -2000), Vector2.new(1, 1)
+    if candidate.Handle then
+        candidate.Handle.AbsolutePosition = Vector2.new(-2000, -2000)
+    end
+end
+editor.PreviewWindow.Frame.AbsolutePosition, editor.PreviewWindow.Frame.AbsoluteSize =
+    Vector2.new(300, 150), Vector2.new(580, 460)
+editor.PreviewObjects.n1.Button.AbsolutePosition, editor.PreviewObjects.n1.Button.AbsoluteSize =
+    Vector2.new(316, 205), Vector2.new(106, 34)
+editor.PreviewObjects.n2.Frame.AbsolutePosition, editor.PreviewObjects.n2.Frame.AbsoluteSize =
+    Vector2.new(316, 260), Vector2.new(548, 288)
+editor.PreviewObjects.n3.Frame.AbsolutePosition, editor.PreviewObjects.n3.Frame.AbsoluteSize =
+    Vector2.new(332, 272), Vector2.new(516, 30)
+editor.PreviewObjects.n4.Frame.AbsolutePosition, editor.PreviewObjects.n4.Frame.AbsoluteSize =
+    Vector2.new(332, 308), Vector2.new(516, 48)
+UIS.MouseLocation = Vector2.new(400, 285)
+services.RunService.RenderStepped:Fire()
+verify(
+    editor.SelectionOutlines.n3.Enabled and not editor.SelectionOutlines.n2.Enabled,
+    "Hover should highlight only the deepest visible control"
+)
+editor:Select("n4")
+verify(
+    editor.SelectionOutlines.n3.Enabled and not editor.SelectionOutlines.n4.Enabled,
+    "Selection must not create a persistent canvas highlight"
+)
+editor.PreviewObjects.n2.Content.Visible = false
+services.RunService.RenderStepped:Fire()
+verify(not editor.SelectionOutlines.n3.Enabled, "Hidden control ancestors must prevent hover")
+editor.PreviewObjects.n2.Content.Visible = true
+UIS.MouseLocation = Vector2.new(-100, -100)
+services.RunService.RenderStepped:Fire()
+verify(editor.HoverKey == nil and not editor.SelectionOutlines.n3.Enabled, "Leaving the canvas must clear highlights")
+
+local grip = editor.PreviewObjects.n3.Frame:FindFirstChild("DesignerGrip")
+local dragPointer = { UserInputType = Enum.UserInputType.MouseButton1, Position = Vector2.new(320, 285) }
+grip.InputBegan:Fire(dragPointer)
+editor:_updateItemDrag({ UserInputType = Enum.UserInputType.MouseMovement, Position = Vector2.new(400, 345) })
+verify(
+    editor.DropTarget and editor.DropTarget.Key == "n4" and editor.DropIndicator.Visible,
+    "Canvas dragging should show an insertion target"
+)
+editor:_endItemDrag(dragPointer)
+verify(editor.Model:Get("n2").Controls[2].Key == "n3", "Dropping a canvas grip should reorder controls")
+verify(editor.Drag == nil and not editor.DropIndicator.Visible, "Dropping should clear drag state")
+editor:Undo()
+verify(editor.Model:Get("n2").Controls[1].Key == "n3", "Canvas moves should support undo")
+editor.Tree.AbsoluteCanvasSize = Vector2.new(214, 1000)
+editor:_beginItemDrag("n3", { UserInputType = Enum.UserInputType.MouseButton1, Position = Vector2.new(50, 495) })
+editor.Drag.Active = true
+editor:_scrollItemDrag(1 / 60)
+verify(editor.Tree.CanvasPosition.Y > 0, "Holding a dragged item at the edge should scroll the outline")
+editor:_cancelItemDrag()
+verify(editor.Drag == nil and not editor.DropIndicator.Visible, "Cancel should clear drag affordances")
+editor.Model.Selection = "n2"
+verify(editor.Model:Add("KeyPicker"), "Keybinds should be insertable for interaction checks")
+local keybindKey = editor.Model.Selection
+editor:Render()
+local keybind = editor.PreviewObjects[keybindKey]
+keybind.Button.Activated:Fire()
+verify(editor.PreviewLibrary._capture == keybind, "Keybinds should capture clicks in editing mode")
+UIS.InputBegan:Fire({ UserInputType = Enum.UserInputType.Keyboard, KeyCode = Enum.KeyCode.Delete }, false)
+verify(
+    editor.Model:Get(keybindKey) ~= nil and keybind.Value == "Delete",
+    "Binding Delete must not delete the selected control"
+)
+verify(editor.Model:Get(keybindKey).Default == "F", "Test keybind changes must not overwrite project defaults")
+editor.Model.Selection = "n2"
+verify(editor.Model:Add("Button"), "Sample buttons should be insertable")
+local buttonKey = editor.Model.Selection
+editor:Render()
+local generatedBefore = editor:ExportLua()
+verify(editor.PreviewObjects[buttonKey]:Press(), "Sample buttons should remain clickable")
+verify(editor:ExportLua() == generatedBefore, "Sample button clicks must not change project data")
 editor:SetTesting(true)
 verify(
-    editor.Testing and not editor.PreviewObjects.n3.Frame:FindFirstChild("DesignerSelect").Visible,
-    "Preview mode should expose control interaction"
+    editor.Testing and not editor.PreviewObjects.n3.Frame:FindFirstChild("DesignerGrip").Visible,
+    "Preview mode should hide layout handles"
 )
 editor:SetTesting(false)
 verify(
-    editor.PreviewObjects.n3.Frame:FindFirstChild("DesignerSelect").Visible,
-    "Editing mode should restore selection overlays"
+    editor.PreviewObjects.n3.Frame:FindFirstChild("DesignerGrip").Visible,
+    "Editing mode should restore layout handles"
 )
 local json = editor:ExportJSON()
 verify(editor:ImportJSON(json), "Project JSON should round-trip")
