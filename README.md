@@ -1,6 +1,6 @@
 # Vortex
 
-A compact Roblox UI library by [shrak](https://github.com/imshrak), built from the interface in `rattex.lua`.
+A compact Roblox UI library by [shrak](https://github.com/imshrak).
 
 Vortex keeps the graphite palette, horizontal navigation, rounded controls, user footer, and draggable launcher. Its window → tab → groupbox API takes inspiration from [Obsidian](https://github.com/deividcomsono/Obsidian). It is an independent implementation with its own supported API.
 
@@ -71,14 +71,3 @@ SaveManager:LoadAutoloadConfig()
 
 Create controls and attach callbacks before loading configs. IDs must be unique across `Library.Options` and `Library.Toggles`. Callbacks run when a value changes; construction does not invoke them. Config operations return `success, resultOrError`.
 
-## Development
-
-All code is comment-free. Documentation lives in Markdown. Format Luau sources with StyLua using the included configuration.
-
-Install the [Luau CLI](https://github.com/luau-lang/luau/releases), then run:
-
-```powershell
-.\tests\run.ps1 -Luau C:\Tools\luau.exe -Compiler C:\Tools\luau-compile.exe
-```
-
-The suite compiles every Lua/Luau source and checks control behavior, input handling, themes, configuration validation, and cleanup against a lightweight Roblox mock. It does not validate Roblox rendering or platform input delivery. Check the Studio example on desktop and touch devices before releasing changes.
