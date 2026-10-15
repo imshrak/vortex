@@ -17,17 +17,29 @@ local function verifyAppearance(library, window, group, toggle, slider, input, d
     expect(position(window.Subtitle, 0, 124, 0, 8), "Subtitle must use the reference header inset")
     expect(position(window.Navigation, 0, 16, 0, 57), "Navigation must start at the reference position")
     expect(window.Navigation.Size.Y.Offset == 34, "Navigation must be 34 pixels tall")
-    expect(position(window.CloseButton, 1, -34, 0, 21), "Close dot must use the original top-right position")
-    expect(position(window.MinimizeButton, 1, -56, 0, 21), "Minimize dot must use the original top-right position")
+    expect(position(window.CloseButton, 1, -40, 0, 13), "Close button must align to the top right")
+    expect(position(window.MinimizeButton, 1, -72, 0, 13), "Minimize button must sit beside close")
     expect(
-        window.CloseButton.Size.X.Offset == 8 and window.CloseButton.Size.Y.Offset == 8,
-        "Header dots must be eight pixels"
+        window.CloseButton.Size.X.Offset == 24 and window.CloseButton.Size.Y.Offset == 24,
+        "Header buttons must be 24-pixel squares"
     )
-    expect(window.CloseButton.BackgroundColor3 == Color3.fromRGB(255, 95, 87), "Close dot must use the original red")
+    expect(window.CloseButton.BackgroundColor3 == Color3.fromRGB(255, 95, 87), "Close button must be red")
+    expect(window.MinimizeButton.BackgroundColor3 == Color3.fromRGB(255, 189, 46), "Minimize button must be yellow")
     expect(
-        window.MinimizeButton.BackgroundColor3 == Color3.fromRGB(255, 189, 46),
-        "Minimize dot must use the original yellow"
+        window.CloseButton.Text == "×" and window.MinimizeButton.Text == "−",
+        "Header buttons must display clear action icons"
     )
+    expect(
+        window.CloseButton:FindFirstChildOfClass("UICorner").CornerRadius.Offset == 4,
+        "Header buttons must have slightly rounded square corners"
+    )
+    local actionCount = 0
+    for _, child in ipairs(window.CloseButton.Parent:GetChildren()) do
+        if child.Name == "Close" or child.Name == "Minimize" or child.Name == "Maximize" then
+            actionCount += 1
+        end
+    end
+    expect(actionCount == 2, "Header must have only two window actions")
     expect(window.Tabs.Main.Button.Size.X.Offset == 64, "Main tab must retain its reference width")
     expect(
         window.Tabs.Main.Label.TextSize == 14 and window.Tabs.Main.Label.TextTransparency == 0.4,

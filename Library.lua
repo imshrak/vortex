@@ -3,7 +3,7 @@ local UIS = game:GetService("UserInputService")
 local TweenService = game:GetService("TweenService")
 
 local Library = {
-    Version = "1.1.1",
+    Version = "1.1.2",
     Options = {},
     Toggles = {},
     Unloaded = false,
@@ -1644,30 +1644,30 @@ function Library:CreateWindow(info)
     for index, color in ipairs({
         Color3.fromRGB(255, 95, 87),
         Color3.fromRGB(255, 189, 46),
-        Color3.fromRGB(15, 15, 15),
     }) do
-        local dot = make("TextButton", {
-            Name = index == 1 and "Close" or index == 2 and "Minimize" or "Maximize",
-            Position = UDim2.new(1, -34 - (index - 1) * 22, 0, 21),
-            Size = UDim2.fromOffset(8, 8),
+        local controlButton = make("TextButton", {
+            Name = index == 1 and "Close" or "Minimize",
+            Position = UDim2.new(1, -40 - (index - 1) * 32, 0, 13),
+            Size = UDim2.fromOffset(24, 24),
             BackgroundColor3 = color,
             BorderSizePixel = 0,
-            Text = "",
+            Text = index == 1 and "×" or "−",
+            TextSize = 18,
+            TextColor3 = Color3.fromRGB(35, 25, 20),
+            FontFace = Font.new("rbxassetid://12187365364", Enum.FontWeight.SemiBold),
             AutoButtonColor = false,
         }, header)
-        corner(dot, 100)
+        corner(controlButton, 4)
         if index == 1 then
-            window.CloseButton = dot
-            dot.Activated:Connect(function()
+            window.CloseButton = controlButton
+            controlButton.Activated:Connect(function()
                 self:Unload()
             end)
-        elseif index == 2 then
-            window.MinimizeButton = dot
-            dot.Activated:Connect(function()
+        else
+            window.MinimizeButton = controlButton
+            controlButton.Activated:Connect(function()
                 window:SetVisible(false)
             end)
-        else
-            stroke(dot, 0.9)
         end
     end
     local function fit()
