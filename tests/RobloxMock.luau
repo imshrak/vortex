@@ -82,7 +82,7 @@ function Color3.fromHex(value)
     return Color3.fromRGB(tonumber(value:sub(1, 2), 16), tonumber(value:sub(3, 4), 16), tonumber(value:sub(5, 6), 16))
 end
 function Color3:ToHex()
-    return string.format("%02X%02X%02X", math.round(self.R * 255), math.round(self.G * 255), math.round(self.B * 255))
+    return string.format("%02x%02x%02x", math.round(self.R * 255), math.round(self.G * 255), math.round(self.B * 255))
 end
 function Color3.fromHSV(h, s, v)
     local sector = math.floor(h * 6) % 6
@@ -151,7 +151,10 @@ end
 
 local instanceMethods = {}
 local function guiClass(class)
-    return table.find({ "Frame", "TextLabel", "TextButton", "TextBox", "ImageLabel", "ScrollingFrame" }, class) ~= nil
+    return table.find(
+        { "Frame", "TextLabel", "TextButton", "TextBox", "ImageLabel", "ImageButton", "ScrollingFrame" },
+        class
+    ) ~= nil
 end
 function instanceMethods:IsA(class)
     return self.ClassName == class or class == "GuiObject" and guiClass(self.ClassName)
@@ -164,6 +167,20 @@ function instanceMethods:GetPropertyChangedSignal(key)
         self._signals[key] = signal()
     end
     return self._signals[key]
+end
+function instanceMethods:SetAttribute(name, value)
+    self._attributes = self._attributes or {}
+    self._attributes[name] = value
+end
+function instanceMethods:GetAttribute(name)
+    return self._attributes and self._attributes[name]
+end
+function instanceMethods:FindFirstChildOfClass(class)
+    for _, child in ipairs(self._children) do
+        if child.ClassName == class then
+            return child
+        end
+    end
 end
 function instanceMethods:Destroy()
     for _, child in ipairs(self:GetChildren()) do
@@ -188,6 +205,7 @@ function Instance.new(class)
         AbsoluteSize = Vector2.new(1280, 720),
         AbsolutePosition = Vector2.new(0, 0),
         BackgroundColor3 = Color3.new(1, 1, 1),
+        BackgroundTransparency = 0,
         Visible = true,
         Activated = signal(),
         InputBegan = signal(),

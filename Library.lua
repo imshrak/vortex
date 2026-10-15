@@ -3,17 +3,17 @@ local UIS = game:GetService("UserInputService")
 local TweenService = game:GetService("TweenService")
 
 local Library = {
-    Version = "1.0.0",
+    Version = "1.1.0",
     Options = {},
     Toggles = {},
     Unloaded = false,
     Theme = {
         Background = Color3.fromRGB(15, 15, 15),
         Surface = Color3.fromRGB(26, 26, 26),
-        Border = Color3.fromRGB(43, 43, 43),
-        Text = Color3.fromRGB(210, 210, 210),
-        Muted = Color3.fromRGB(135, 135, 135),
-        Accent = Color3.fromRGB(235, 235, 235),
+        Border = Color3.new(1, 1, 1),
+        Text = Color3.new(1, 1, 1),
+        Muted = Color3.fromRGB(165, 165, 165),
+        Accent = Color3.new(1, 1, 1),
         Track = Color3.fromRGB(60, 60, 60),
     },
     Icons = {
@@ -25,8 +25,12 @@ local Library = {
         gear = "rbxassetid://106205298246017",
         globe = "rbxassetid://125685532120024",
         grid = "rbxassetid://108197747587523",
+        webhook = "rbxassetid://10709811110",
+        chevron = "rbxassetid://101007429951147",
+        lock = "rbxassetid://10723434711",
     },
     _connections = {},
+    _instances = {},
     _bindings = setmetatable({}, { __mode = "k" }),
     _unloadCallbacks = {},
 }
@@ -59,10 +63,11 @@ local function themed(object, properties)
     return object
 end
 
-local function stroke(object)
+local function stroke(object, transparency)
     return themed(
         make("UIStroke", {
             Thickness = 1,
+            Transparency = transparency or 0.95,
             ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
         }, object),
         { Color = "Border" }
@@ -78,6 +83,7 @@ local function text(parent, value, size, role)
             BorderSizePixel = 0,
             Text = tostring(value or ""),
             TextSize = size or 13,
+            TextTransparency = 0.4,
             FontFace = Font.new("rbxassetid://12187365364", Enum.FontWeight.Medium),
             TextXAlignment = Enum.TextXAlignment.Left,
             TextTruncate = Enum.TextTruncate.AtEnd,
@@ -95,7 +101,7 @@ local function button(parent, caption)
             BorderSizePixel = 0,
             AutoButtonColor = false,
             Text = caption or "",
-            TextSize = 12,
+            TextSize = 11,
             FontFace = Font.new("rbxassetid://12187365364", Enum.FontWeight.Medium),
         }, parent),
         { TextColor3 = "Text" }
@@ -115,10 +121,18 @@ local function box(parent, placeholder)
             FontFace = Font.new("rbxassetid://12187365364", Enum.FontWeight.Medium),
             ClearTextOnFocus = false,
         }, parent),
-        { BackgroundColor3 = "Surface", TextColor3 = "Text", PlaceholderColor3 = "Muted" }
+        {
+            BackgroundColor3 = "Surface",
+            TextColor3 = function()
+                return Color3.fromRGB(155, 155, 155)
+            end,
+            PlaceholderColor3 = function()
+                return Color3.fromRGB(86, 86, 86)
+            end,
+        }
     )
     corner(object, 4)
-    stroke(object)
+    stroke(object, 0.9)
     return object
 end
 
@@ -226,6 +240,10 @@ function Library:Unload()
     table.clear(self._connections)
     table.clear(self._bindings)
     table.clear(self._unloadCallbacks)
+    for _, instance in ipairs(self._instances) do
+        instance:Destroy()
+    end
+    table.clear(self._instances)
     table.clear(self.Options)
     table.clear(self.Toggles)
     self._pointer, self._capture, self._dropdown = nil, nil, nil
@@ -239,30 +257,17 @@ function Library:Notify(message, duration)
         duration = message.Duration
         message = message.Title and (message.Title .. " · " .. (message.Description or "")) or message.Description
     end
-    local holder = self.Window.Notifications
-    local card = themed(
-        make("Frame", {
-            Name = "Notification",
-            Size = UDim2.fromOffset(280, 0),
-            AutomaticSize = Enum.AutomaticSize.Y,
-            BorderSizePixel = 0,
-        }, holder),
-        { BackgroundColor3 = "Surface" }
-    )
-    corner(card, 8)
-    stroke(card)
-    pad(card, 12)
-    local caption = text(card, message, 12)
-    caption.Size = UDim2.new(1, 0, 0, 0)
-    caption.AutomaticSize = Enum.AutomaticSize.Y
-    caption.TextWrapped = true
-    caption.TextTruncate = Enum.TextTruncate.None
+    self._messageId = (self._messageId or 0) + 1
+    local id, toast = self._messageId, self.Window.Toast
+    toast.Text, toast.Visible = tostring(message or ""), true
+    self.Window.Footer.Visible = false
     task.delay(finite(duration) and math.max(0.1, duration) or 3, function()
-        if card.Parent then
-            card:Destroy()
+        if not self.Unloaded and self._messageId == id then
+            toast.Visible = false
+            self.Window.Footer.Visible = true
         end
     end)
-    return card
+    return toast
 end
 
 local function control(group, kind, index, info, height)
@@ -279,8 +284,14 @@ local function control(group, kind, index, info, height)
         BackgroundTransparency = 1,
         Visible = info.Visible ~= false,
     }, group.Content)
+    frame:SetAttribute("BaseHeight", height or 30)
+    local constraint = make(
+        "UISizeConstraint",
+        { MinSize = Vector2.new(0, height or 30), MaxSize = Vector2.new(100000, height or 30) },
+        frame
+    )
     local caption = text(frame, info.Text or index or "", 13)
-    caption.Size = UDim2.new(1, -90, 1, 0)
+    caption.Size = UDim2.new(1, -76, 1, 0)
     local object = {
         Type = kind,
         Id = index,
@@ -289,9 +300,20 @@ local function control(group, kind, index, info, height)
         Group = group,
         Disabled = info.Disabled == true,
         Value = nil,
+        Text = info.Text or index or "",
         _listeners = {},
         _callback = info.Callback,
     }
+    function object:SetHeight(height)
+        frame:SetAttribute("BaseHeight", height)
+        constraint.MaxSize = Vector2.new(100000, math.max(height, constraint.MinSize.Y))
+        constraint.MinSize = Vector2.new(0, height)
+        constraint.MaxSize = Vector2.new(100000, height)
+        frame.Size = UDim2.new(1, 0, 0, height)
+        if group.Tab then
+            group.Tab:Resize()
+        end
+    end
     function object:OnChanged(callback)
         assert(type(callback) == "function", "OnChanged expects a function")
         table.insert(self._listeners, callback)
@@ -304,6 +326,7 @@ local function control(group, kind, index, info, height)
         end
     end
     function object:SetText(value)
+        self.Text = tostring(value)
         self.Label.Text = tostring(value)
         return self
     end
@@ -316,7 +339,7 @@ local function control(group, kind, index, info, height)
     end
     function object:SetDisabled(value)
         self.Disabled = value == true
-        caption.TextTransparency = self.Disabled and 0.55 or 0
+        caption.TextTransparency = 0.4
         if self.Box then
             self.Box.TextEditable = not self.Disabled
         end
@@ -357,6 +380,15 @@ local function control(group, kind, index, info, height)
         (kind == "Toggle" and Library.Toggles or Library.Options)[index] = object
     end
     object:SetDisabled(object.Disabled)
+    if group.Tab then
+        frame:GetPropertyChangedSignal("Size"):Connect(function()
+            group.Tab:Resize()
+        end)
+        frame:GetPropertyChangedSignal("Visible"):Connect(function()
+            group.Tab:Resize()
+        end)
+        group.Tab:Resize()
+    end
     return object
 end
 
@@ -364,23 +396,25 @@ function Group:AddLabel(value, wrapped)
     local object = control(self, "Label", nil, { Text = value }, 24)
     object.Label.Size = UDim2.fromScale(1, 1)
     if wrapped then
-        object.Frame.AutomaticSize = Enum.AutomaticSize.Y
-        object.Frame.Size = UDim2.new(1, 0, 0, 0)
         object.Label.Size = UDim2.new(1, 0, 0, 0)
         object.Label.AutomaticSize = Enum.AutomaticSize.Y
         object.Label.TextWrapped = true
         object.Label.TextTruncate = Enum.TextTruncate.None
+        object.Label:GetPropertyChangedSignal("TextBounds"):Connect(function()
+            object:SetHeight(math.max(24, object.Label.TextBounds.Y))
+        end)
     end
     return object
 end
 
 function Group:AddDivider()
-    local object = control(self, "Divider", nil, {}, 13)
+    local object = control(self, "Divider", nil, {}, 17)
     object.Label:Destroy()
     themed(
         make("Frame", {
-            Position = UDim2.fromOffset(0, 6),
+            Position = UDim2.fromOffset(0, 8),
             Size = UDim2.new(1, 0, 0, 1),
+            BackgroundTransparency = 0.9,
             BorderSizePixel = 0,
         }, object.Frame),
         { BackgroundColor3 = "Border" }
@@ -394,10 +428,15 @@ function Group:AddButton(info, callback)
     end
     local object = control(self, "Button", nil, info)
     object.Label.Size = UDim2.new(1, -24, 1, 0)
-    local arrow = text(object.Frame, "›", 20, "Muted")
-    arrow.Position = UDim2.new(1, -20, 0, 0)
-    arrow.Size = UDim2.fromOffset(20, 30)
-    arrow.TextXAlignment = Enum.TextXAlignment.Right
+    make("ImageLabel", {
+        Name = "Icon_chevron",
+        BackgroundTransparency = 1,
+        Position = UDim2.new(1, -15, 0, 7.5),
+        Size = UDim2.fromOffset(15, 15),
+        Image = Library.Icons.chevron,
+        ImageColor3 = Color3.new(1, 1, 1),
+        ImageTransparency = 0.35,
+    }, object.Frame)
     object.Button = button(object.Frame)
     function object:Press()
         if not self.Disabled then
@@ -413,30 +452,32 @@ end
 function Group:AddToggle(index, info)
     info = info or {}
     local object = control(self, "Toggle", index, info)
-    local pill = themed(
-        make("Frame", {
-            Name = "Pill",
-            Position = UDim2.new(1, -41, 0.5, -10.5),
-            Size = UDim2.fromOffset(41, 21),
-            BorderSizePixel = 0,
-        }, object.Frame),
-        { BackgroundColor3 = "Track" }
-    )
-    corner(pill, 12)
-    local knob = themed(
-        make("Frame", {
-            Name = "Knob",
-            Position = UDim2.fromOffset(3, 3),
-            Size = UDim2.fromOffset(15, 15),
-            BorderSizePixel = 0,
-        }, pill),
-        {
-            BackgroundColor3 = function(theme)
-                return object.Value and theme.Accent or theme.Muted
-            end,
-        }
-    )
-    corner(knob, 10)
+    local pill = make("ImageButton", {
+        Name = "Toggle",
+        Position = UDim2.new(1, -41, 0, 6),
+        Size = UDim2.fromOffset(41, 21),
+        BackgroundTransparency = 1,
+        Image = "rbxassetid://18772190202",
+        AutoButtonColor = false,
+    }, object.Frame)
+    local knob = make("ImageLabel", {
+        Name = "TogglerHead",
+        Position = UDim2.fromOffset(3, 3),
+        Size = UDim2.fromOffset(15, 15),
+        BackgroundTransparency = 1,
+        Image = "rbxassetid://18772309008",
+    }, pill)
+    themed(pill, {
+        ImageColor3 = function()
+            return object.Value and Color3.fromRGB(86, 86, 86) or Color3.fromRGB(60, 60, 60)
+        end,
+    })
+    themed(knob, {
+        ImageColor3 = function(theme)
+            return object.Value and theme.Accent or Color3.fromRGB(90, 90, 90)
+        end,
+    })
+    object.Pill, object.Knob = pill, knob
     object.Button = button(object.Frame)
     function object:Validate(value)
         return type(value) == "boolean"
@@ -447,7 +488,8 @@ function Group:AddToggle(index, info)
         end
         local changed = self.Value ~= value
         self.Value = value
-        knob.BackgroundColor3 = value and Library.Theme.Accent or Library.Theme.Muted
+        knob.ImageColor3 = value and Library.Theme.Accent or Color3.fromRGB(90, 90, 90)
+        pill.ImageColor3 = value and Color3.fromRGB(86, 86, 86) or Color3.fromRGB(60, 60, 60)
         if self._tween then
             self._tween:Cancel()
         end
@@ -477,39 +519,45 @@ function Group:AddSlider(index, info)
         finite(rounding) and rounding >= 0 and rounding <= 6 and rounding % 1 == 0,
         "Rounding must be an integer from 0 to 6"
     )
-    local object = control(self, "Slider", index, info, 48)
+    local object = control(self, "Slider", index, info, 47.52)
     object.Min, object.Max, object.Rounding = minimum, maximum, rounding
-    object.Label.Size = UDim2.new(1, -65, 0, 23)
+    object.Label.Size = UDim2.new(148 / 508, 0, 0, 13)
+    object.Label.AnchorPoint = Vector2.new(0, 0.5)
+    object.Label.Position = UDim2.fromScale(0, 19.8 / 47.52)
     local valueBox = box(object.Frame)
-    valueBox.Position = UDim2.new(1, -56, 0, 0)
-    valueBox.Size = UDim2.fromOffset(56, 23)
+    valueBox.Name = "Value"
+    valueBox.Position = UDim2.new(1, -41, 10.8 / 47.52, 0)
+    valueBox.Size = UDim2.fromOffset(41, 21)
+    valueBox.TextSize = 11
+    themed(valueBox, {
+        BackgroundColor3 = "Surface",
+        TextColor3 = function()
+            return Color3.fromRGB(170, 170, 170)
+        end,
+    })
     object.Box = valueBox
-    local track = themed(
-        make("Frame", {
-            Name = "Track",
-            Position = UDim2.new(0, 0, 0, 35),
-            Size = UDim2.new(1, -6, 0, 3),
-            BorderSizePixel = 0,
-        }, object.Frame),
-        { BackgroundColor3 = "Track" }
-    )
-    local fill = themed(
-        make("Frame", { Name = "Fill", Size = UDim2.fromScale(0, 1), BorderSizePixel = 0 }, track),
-        { BackgroundColor3 = "Accent" }
-    )
+    local track = make("Frame", {
+        Name = "Track",
+        Position = UDim2.fromScale(160 / 508, 19.8 / 47.52),
+        Size = UDim2.new(290 / 508, 0, 0, 3),
+        BackgroundColor3 = Color3.fromRGB(87, 87, 87),
+        BorderSizePixel = 0,
+    }, object.Frame)
     local knob = themed(
         make("Frame", {
-            Name = "Knob",
+            Name = "Head",
             AnchorPoint = Vector2.new(0.5, 0.5),
-            Size = UDim2.fromOffset(11, 11),
+            Size = UDim2.fromOffset(12, 12),
             BorderSizePixel = 0,
         }, track),
         { BackgroundColor3 = "Accent" }
     )
-    corner(knob, 10)
+    corner(knob, 100)
     local hit = button(object.Frame)
-    hit.Position = UDim2.fromOffset(0, 25)
-    hit.Size = UDim2.new(1, 0, 0, 23)
+    hit.Name = "Drag"
+    hit.Position = UDim2.new(154 / 508, 0, 0, 7)
+    hit.Size = UDim2.new(302 / 508, 0, 0, 23)
+    object.Track, object.Head, object.Button = track, knob, hit
     function object:Validate(value)
         return finite(value)
     end
@@ -525,7 +573,6 @@ function Group:AddSlider(index, info)
         valueBox.Text = tostring(value)
         local fraction = (value - minimum) / (maximum - minimum)
         knob.Position = UDim2.fromScale(fraction, 0.5)
-        fill.Size = UDim2.fromScale(fraction, 1)
         if changed and not silent then
             self:_emit()
         end
@@ -558,7 +605,7 @@ function Group:AddSlider(index, info)
             valueBox.Text = tostring(object.Value)
         end
     end)
-    object:SetValue(info.Default or minimum, true)
+    assert(object:SetValue(info.Default or minimum, true), "Invalid slider default")
     object:SetDisabled(object.Disabled)
     return object
 end
@@ -572,9 +619,11 @@ function Group:AddInput(index, info)
     local object = control(self, "Input", index, info, 38)
     object.Numeric = info.Numeric == true
     local field = box(object.Frame, info.Placeholder)
-    field.Position = UDim2.new(0.48, 0, 0.5, -12)
-    field.Size = UDim2.new(0.52, 0, 0, 24)
-    object.Label.Size = UDim2.new(0.46, 0, 1, 0)
+    local width = info.Width or 58
+    field.Position = UDim2.new(1, -width, 0.5, -10.5)
+    field.Size = UDim2.fromOffset(width, 21)
+    field.TextSize = 11
+    object.Label.Size = UDim2.new(1, -width - 16, 1, 0)
     object.Box = field
     function object:Validate(value)
         return type(value) == "string" and (not self.Numeric or finite(tonumber(value)))
@@ -623,45 +672,74 @@ function Group:AddDropdown(index, info)
     )
     local object = control(self, "Dropdown", index, info, 35)
     object.Multi, object.Values, object.Opened = info.Multi == true, {}, false
-    object.Label.Position = UDim2.fromOffset(12, 0)
-    object.Label.Size = UDim2.new(1, -38, 0, 35)
-    themed(object.Frame, { BackgroundColor3 = "Surface" })
-    object.Frame.BackgroundTransparency = 0.6
-    corner(object.Frame)
-    stroke(object.Frame)
-    local arrow = text(object.Frame, "+", 16, "Muted")
-    arrow.Position = UDim2.new(1, -27, 0, 0)
-    arrow.Size = UDim2.fromOffset(20, 35)
+    object.Label.Position = UDim2.fromOffset(15, 0)
+    object.Label.Size = UDim2.new(1, -50, 0, 35)
+    themed(object.Frame, { BackgroundColor3 = "Text" })
+    object.Frame.BackgroundTransparency = 0.985
+    corner(object.Frame, 6)
+    stroke(object.Frame, 0.95)
+    local grid = make("ImageLabel", {
+        Name = "Icon_grid",
+        BackgroundTransparency = 1,
+        Position = UDim2.new(1, -30, 0, 10.5),
+        Size = UDim2.fromOffset(14, 14),
+        Image = Library.Icons.grid,
+        ImageTransparency = 0.35,
+    }, object.Frame)
     object.Button = button(object.Frame)
     object.Button.Size = UDim2.new(1, 0, 0, 35)
     local body = make("Frame", {
         Name = "Expanded",
-        Position = UDim2.fromOffset(8, 38),
-        Size = UDim2.new(1, -16, 0, 0),
+        Position = UDim2.fromOffset(0, 35),
+        Size = UDim2.new(1, 0, 0, 0),
         BackgroundTransparency = 1,
         Visible = false,
     }, object.Frame)
     local search
     if info.Searchable then
-        search = box(body, "Search...")
-        search.Size = UDim2.new(1, 0, 0, 28)
-        search.TextXAlignment = Enum.TextXAlignment.Left
-        pad(search, 8)
+        local bar = make("Frame", {
+            Name = "SearchBar",
+            Position = UDim2.fromOffset(15, 3),
+            Size = UDim2.new(1, -30, 0, 30),
+            BackgroundColor3 = Color3.fromRGB(31, 31, 31),
+            BorderSizePixel = 0,
+        }, body)
+        corner(bar, 8)
+        make("ImageLabel", {
+            Name = "SearchIcon",
+            Position = UDim2.fromOffset(14, 9),
+            Size = UDim2.fromOffset(13, 13),
+            BackgroundTransparency = 1,
+            Image = "rbxassetid://72296609649861",
+            ImageColor3 = Color3.fromRGB(160, 160, 160),
+        }, bar)
+        search = make("TextBox", {
+            Name = "Search",
+            Position = UDim2.fromOffset(37, 0),
+            Size = UDim2.new(1, -48, 1, 0),
+            BackgroundTransparency = 1,
+            Text = "",
+            PlaceholderText = "Search...",
+            TextColor3 = Color3.fromRGB(210, 210, 210),
+            PlaceholderColor3 = Color3.fromRGB(160, 160, 160),
+            TextSize = 13,
+            TextXAlignment = Enum.TextXAlignment.Left,
+            FontFace = Font.new("rbxassetid://12187365364", Enum.FontWeight.Medium),
+            ClearTextOnFocus = false,
+        }, bar)
     end
-    local offset = search and 34 or 0
+    local offset = search and 37 or 3
     local options = make("ScrollingFrame", {
         Name = "Options",
         Position = UDim2.fromOffset(0, offset),
         Size = UDim2.new(1, 0, 0, 0),
         BackgroundTransparency = 1,
         BorderSizePixel = 0,
-        ScrollBarThickness = 2,
-        AutomaticCanvasSize = Enum.AutomaticSize.Y,
+        ScrollBarThickness = 1,
         CanvasSize = UDim2.new(),
         ScrollingDirection = Enum.ScrollingDirection.Y,
     }, body)
-    list(options, 0)
-    object.Search, object.OptionsFrame = search, options
+    object.Search, object.OptionsFrame, object.Body = search, options, body
     local function display()
         local selected = {}
         if object.Multi then
@@ -673,7 +751,7 @@ function Group:AddDropdown(index, info)
         elseif object.Value then
             table.insert(selected, object.Value)
         end
-        object.Label.Text = (info.Text or index) .. (#selected > 0 and " · " .. table.concat(selected, ", ") or "")
+        object.Label.Text = object.Text .. (#selected > 0 and " • " .. table.concat(selected, ", ") or "")
     end
     function object:Refresh()
         for _, child in ipairs(options:GetChildren()) do
@@ -687,12 +765,28 @@ function Group:AddDropdown(index, info)
             if value:lower():find(query, 1, true) then
                 count = count + 1
                 local selected = self.Multi and self.Value[value] or self.Value == value
-                local item = button(options, (selected and "✓  " or "") .. value)
+                local item = button(options)
                 item.Name = "Option"
-                item.TextXAlignment = Enum.TextXAlignment.Left
-                item.Size = UDim2.new(1, -4, 0, 30)
+                item.Position = UDim2.fromOffset(0, (count - 1) * 35)
+                item.Size = UDim2.new(1, 0, 0, 35)
                 item.LayoutOrder = count
-                pad(item, 10)
+                item:SetAttribute("OptionLabel", value)
+                item:SetAttribute("Selected", selected == true)
+                local caption = text(item, value, 13)
+                caption.Name = "OptionLabel"
+                caption.Position = UDim2.fromOffset(selected and 53 or 28, 0)
+                caption.Size = UDim2.new(1, selected and -70 or -45, 1, 0)
+                caption.TextTransparency = selected and 0.15 or 0.45
+                if selected then
+                    make("ImageLabel", {
+                        Name = "Check",
+                        Position = UDim2.fromOffset(28, 12.5),
+                        Size = UDim2.fromOffset(10, 10),
+                        BackgroundTransparency = 1,
+                        Image = "rbxassetid://86817768619372",
+                        ImageColor3 = Color3.new(1, 1, 1),
+                    }, item)
+                end
                 item.Activated:Connect(function()
                     if self.Disabled then
                         return
@@ -709,14 +803,17 @@ function Group:AddDropdown(index, info)
             end
         end
         if count == 0 then
-            local empty = text(options, "No results", 12, "Muted")
-            empty.Size = UDim2.new(1, 0, 0, 30)
+            local empty = text(options, "No results", 13)
+            empty.Position = UDim2.fromOffset(28, 0)
+            empty.Size = UDim2.new(1, -45, 0, 35)
+            empty.TextTransparency = 0.55
         end
-        local visible = math.min(math.max(count, 1), info.MaxVisibleDropdownItems or 6)
-        options.Size = UDim2.new(1, 0, 0, visible * 30)
-        body.Size = UDim2.new(1, -16, 0, offset + visible * 30)
+        local visible = math.min(math.max(count, 1), info.MaxVisibleDropdownItems or math.huge)
+        options.Size = UDim2.new(1, 0, 0, visible * 35)
+        options.CanvasSize = UDim2.fromOffset(0, math.max(1, count) * 35)
+        body.Size = UDim2.new(1, 0, 0, offset + visible * 35 + 7)
         if self.Opened then
-            self.Frame.Size = UDim2.new(1, 0, 0, 46 + offset + visible * 30)
+            self:SetHeight(35 + offset + visible * 35 + 7)
         end
         display()
     end
@@ -797,11 +894,31 @@ function Group:AddDropdown(index, info)
             Library._dropdown = nil
         end
         self.Opened, body.Visible = value, value
-        arrow.Text = value and "−" or "+"
         if value then
+            if search then
+                search.Text = ""
+            end
             self:Refresh()
+            if self.Group.Tab then
+                task.defer(function()
+                    if Library.Unloaded or not self.Opened then
+                        return
+                    end
+                    local viewport = self.Group.Tab.Frame
+                    if self.Frame.AbsolutePosition.Y - viewport.AbsolutePosition.Y > viewport.AbsoluteSize.Y * 0.5 then
+                        viewport.CanvasPosition = Vector2.new(
+                            0,
+                            math.max(
+                                0,
+                                viewport.CanvasSize.Y.Offset
+                                    - viewport.AbsoluteSize.Y / self.Group.Tab.Window.Scale.Scale
+                            )
+                        )
+                    end
+                end)
+            end
         else
-            self.Frame.Size = UDim2.new(1, 0, 0, 35)
+            self:SetHeight(35)
             if search then
                 search:ReleaseFocus()
             end
@@ -866,8 +983,9 @@ function Group:AddKeyPicker(index, info)
     local modes = { Toggle = true, Hold = true, Press = true, Always = true }
     assert(modes[object.Mode], "Invalid keybind mode")
     local binder = button(object.Frame)
-    binder.Position = UDim2.new(1, -92, 0.5, -11)
-    binder.Size = UDim2.fromOffset(92, 22)
+    binder.Position = UDim2.new(1, -21, 0, 6)
+    binder.Size = UDim2.fromOffset(21, 21)
+    binder.TextSize = 11
     binder.BackgroundTransparency = 0
     themed(binder, { BackgroundColor3 = "Surface", TextColor3 = "Muted" })
     corner(binder, 4)
@@ -889,7 +1007,10 @@ function Group:AddKeyPicker(index, info)
         end
         local changed = self.Value ~= key or self.Mode ~= mode
         self.Value, self.Mode, self.State = key, mode, false
-        binder.Text = key
+        binder.Text = key == "None" and "..." or key
+        local width = #binder.Text <= 3 and 21 or #binder.Text * 6 + 8
+        binder.Size = UDim2.fromOffset(width, 21)
+        binder.Position = UDim2.new(1, -width, 0, 6)
         if changed and not silent then
             self:_emit()
         end
@@ -928,6 +1049,7 @@ function Group:AddColorPicker(index, info)
     info = info or {}
     assert(info.Transparency == nil or finite(info.Transparency), "Transparency must be finite")
     local object = control(self, "ColorPicker", index, info, 35)
+    object.Label.Size = UDim2.new(1, -76, 0, 35)
     local swatch = button(object.Frame)
     swatch.Position = UDim2.new(1, -42, 0, 7)
     swatch.Size = UDim2.fromOffset(42, 21)
@@ -988,7 +1110,7 @@ function Group:AddColorPicker(index, info)
     function object:SetOpen(value)
         self.Opened = value == true and not self.Disabled and self.Frame.Visible
         body.Visible = self.Opened
-        self.Frame.Size = UDim2.new(1, 0, 0, self.Opened and (38 + (alpha and 4 or 3) * 52 + 30) or 35)
+        self:SetHeight(self.Opened and (38 + (alpha and 4 or 3) * 52 + 30) or 35)
         return self
     end
     local function update()
@@ -1036,44 +1158,121 @@ function Group:AddColorPicker(index, info)
     return object
 end
 
+function Tab:Resize()
+    if self._resizing or Library.Unloaded then
+        return
+    end
+    self._resizing = true
+    local width = self.Window.Size.X - 40
+    local fullHeight, leftHeight, rightHeight = 0, 0, 0
+    for _, group in ipairs(self.Groups) do
+        local cardWidth = group.Side == "full" and width or (width - 10) / 2
+        local contentWidth = cardWidth - 32
+        local y, count = 0, 0
+        local rows = {}
+        for _, row in ipairs(group.Content:GetChildren()) do
+            if row:IsA("GuiObject") and row.Visible then
+                table.insert(rows, row)
+            end
+        end
+        table.sort(rows, function(a, b)
+            return a.LayoutOrder < b.LayoutOrder
+        end)
+        for _, row in ipairs(rows) do
+            if count > 0 then
+                y += 6
+            end
+            row.Position = UDim2.fromOffset(0, y)
+            local rowHeight = row:GetAttribute("BaseHeight") or row.Size.Y.Offset
+            local constraint = row:FindFirstChildOfClass("UISizeConstraint")
+            if constraint then
+                constraint.MaxSize =
+                    Vector2.new(math.max(contentWidth, constraint.MinSize.X), math.max(rowHeight, constraint.MinSize.Y))
+                constraint.MinSize = Vector2.new(contentWidth, rowHeight)
+                constraint.MaxSize = constraint.MinSize
+            end
+            row.Size = UDim2.fromOffset(contentWidth, rowHeight)
+            y += rowHeight
+            count += 1
+        end
+        group.Content.Position = UDim2.fromOffset(16, group.ShowTitle and 36 or 12)
+        group.Content.Size = UDim2.fromOffset(contentWidth, y)
+        local height = math.max(group.MinimumHeight, y + (group.ShowTitle and 48 or 24))
+        group.Height = height
+        group.Frame.Size = UDim2.fromOffset(cardWidth, height)
+        group.Constraint.MaxSize =
+            Vector2.new(math.max(cardWidth, group.Constraint.MinSize.X), math.max(height, group.Constraint.MinSize.Y))
+        group.Constraint.MinSize = Vector2.new(cardWidth, height)
+        group.Constraint.MaxSize = group.Constraint.MinSize
+        if group.Side == "full" then
+            group.Frame.Position = UDim2.fromOffset(0, fullHeight)
+            fullHeight += height + 10
+        end
+    end
+    for _, group in ipairs(self.Groups) do
+        if group.Side ~= "full" then
+            local right = group.Side == "right"
+            group.Frame.Position =
+                UDim2.fromOffset(right and (width + 10) / 2 or 0, fullHeight + (right and rightHeight or leftHeight))
+            if right then
+                rightHeight += group.Height + 10
+            else
+                leftHeight += group.Height + 10
+            end
+        end
+    end
+    local height = math.max(0, fullHeight + math.max(leftHeight, rightHeight) - 10)
+    self.Content.Size = UDim2.fromOffset(width, height)
+    self.Frame.CanvasSize = UDim2.fromOffset(0, height + 8)
+    self._resizing = false
+end
+
 function Tab:AddGroupbox(info)
     if type(info) == "string" then
         info = { Name = info }
     end
     info = info or {}
     local side = (info.Side or "Full"):lower()
-    assert(side == "full" or side == "left" or side == "right", "Groupbox Side must be Full, Left, or Right")
-    local parent = side == "full" and self.Content or self.Columns[side]
-    self.Order = self.Order + 1
+    assert(side == "full" or side == "left" or side == "right", "Invalid groupbox side")
     local card = themed(
         make("Frame", {
             Name = info.Name or "Groupbox",
-            Size = UDim2.new(1, 0, 0, 0),
-            AutomaticSize = Enum.AutomaticSize.Y,
+            Size = UDim2.fromOffset(540, 42),
             BackgroundTransparency = 1,
             BorderSizePixel = 0,
-            LayoutOrder = self.Order,
-        }, parent),
+        }, self.Content),
         { BackgroundColor3 = "Background" }
     )
     corner(card, 8)
-    stroke(card)
-    pad(card, 16)
-    list(card, 8)
-    if info.Name and info.Name ~= "" then
-        local heading = text(card, info.Name, 12, "Muted")
-        heading.Size = UDim2.new(1, 0, 0, 20)
-        heading.LayoutOrder = 0
-    end
+    stroke(card, 0.95)
     local content = make("Frame", {
         Name = "Content",
-        Size = UDim2.new(1, 0, 0, 0),
+        Position = UDim2.fromOffset(16, 12),
+        Size = UDim2.new(1, -32, 0, 0),
         BackgroundTransparency = 1,
-        AutomaticSize = Enum.AutomaticSize.Y,
-        LayoutOrder = 1,
     }, card)
+    local constraint =
+        make("UISizeConstraint", { MinSize = Vector2.new(0, 0), MaxSize = Vector2.new(100000, 100000) }, card)
     list(content, 6)
-    return setmetatable({ Frame = card, Content = content, Order = 0, Tab = self }, Group)
+    local showTitle = info.ShowTitle == true
+    if showTitle then
+        local heading = text(card, info.Name or "", 12)
+        heading.Position = UDim2.fromOffset(16, 8)
+        heading.Size = UDim2.new(1, -32, 0, 20)
+    end
+    local group = setmetatable({
+        Frame = card,
+        Constraint = constraint,
+        Content = content,
+        Order = 0,
+        Tab = self,
+        Side = side,
+        ShowTitle = showTitle,
+        MinimumHeight = info.MinHeight or (#self.Groups == 0 and side == "full" and 288 or 42),
+    }, Group)
+    table.insert(self.Groups, group)
+    self:Resize()
+    return group
 end
 
 function Tab:AddLeftGroupbox(name)
@@ -1087,84 +1286,73 @@ function Tab:Select()
 end
 
 function Window:AddTab(name, icon)
-    assert(type(name) == "string" and not self.Tabs[name], "Tab name must be unique")
-    local nav = button(self.Navigation, name)
+    assert(type(name) == "string" and name ~= "" and not self.Tabs[name], "Tab name must be unique")
+    local widths = { Main = 64, Target = 74, Misc = 60, Roles = 64, Webhook = 88, Player = 72, Settings = 90 }
+    local width = widths[name] or math.max(60, #name * 7 + (icon and 30 or 16))
+    local nav = button(self.Navigation)
     nav.Name = name
-    nav.Size = UDim2.fromOffset(math.max(72, #name * 7 + (icon and 38 or 24)), 32)
-    nav.LayoutOrder = #self.TabOrder + 1
-    corner(nav, 6)
-    themed(nav, {
-        BackgroundColor3 = "Surface",
-        TextColor3 = function(theme)
-            return self.SelectedTab == name and theme.Text or theme.Muted
-        end,
-    })
+    nav.Position = UDim2.fromOffset(self.NavOffset, 0)
+    nav.Size = UDim2.fromOffset(width, 34)
+    themed(nav, { BackgroundColor3 = "Text" })
+    corner(nav, 8)
+    local outline = stroke(nav, 1)
+    local image
     if icon then
         local asset = Library.Icons[icon] or tostring(icon)
         if tonumber(asset) then
             asset = "rbxassetid://" .. asset
         end
-        themed(
+        image = themed(
             make("ImageLabel", {
-                Name = "Icon",
+                Name = "Icon_" .. tostring(icon),
                 BackgroundTransparency = 1,
-                Image = asset,
-                Position = UDim2.fromOffset(10, 9),
+                Position = UDim2.fromOffset(5, 10),
                 Size = UDim2.fromOffset(14, 14),
+                Image = asset,
+                ImageTransparency = 0.4,
+                ScaleType = Enum.ScaleType.Fit,
             }, nav),
-            { ImageColor3 = "Muted" }
+            { ImageColor3 = "Text" }
         )
-        pad(nav, 8).PaddingLeft = UDim.new(0, 28)
     end
+    local caption = text(nav, name, 14)
+    caption.Position = UDim2.fromOffset(icon and 23 or 8, 0)
+    caption.Size = UDim2.fromOffset(width - (icon and 28 or 16), 34)
+    caption.FontFace = Font.new("rbxassetid://12187365364", Enum.FontWeight.SemiBold)
     local viewport = make("ScrollingFrame", {
-        Name = name .. "Page",
+        Name = name .. "Viewport",
         Position = UDim2.fromOffset(16, 102),
         Size = UDim2.new(1, -32, 1, -140),
         BackgroundTransparency = 1,
         BorderSizePixel = 0,
-        ScrollBarThickness = 2,
-        CanvasSize = UDim2.new(),
-        AutomaticCanvasSize = Enum.AutomaticSize.Y,
+        ScrollBarThickness = 1,
+        ScrollBarImageColor3 = Color3.fromRGB(110, 110, 110),
+        ScrollBarImageTransparency = 0.4,
         ScrollingDirection = Enum.ScrollingDirection.Y,
+        CanvasSize = UDim2.new(),
+        ClipsDescendants = true,
         Visible = false,
     }, self.Frame)
-    local content = make("Frame", {
-        Name = "Content",
-        Size = UDim2.new(1, -6, 0, 0),
-        AutomaticSize = Enum.AutomaticSize.Y,
-        BackgroundTransparency = 1,
-    }, viewport)
-    list(content, 10)
-    local columns = make("Frame", {
-        Name = "Columns",
-        Size = UDim2.new(1, 0, 0, 0),
-        AutomaticSize = Enum.AutomaticSize.Y,
-        BackgroundTransparency = 1,
-        LayoutOrder = 100000,
-    }, content)
-    local sides = {}
-    for _, side in ipairs({ "left", "right" }) do
-        local column = make("Frame", {
-            Name = side,
-            Position = side == "left" and UDim2.new() or UDim2.new(0.5, 5, 0, 0),
-            Size = UDim2.new(0.5, -5, 0, 0),
-            AutomaticSize = Enum.AutomaticSize.Y,
-            BackgroundTransparency = 1,
-        }, columns)
-        list(column, 10)
-        sides[side] = column
-    end
+    local content = make(
+        "Frame",
+        { Name = "Content", Size = UDim2.fromOffset(self.Size.X - 40, 0), BackgroundTransparency = 1 },
+        viewport
+    )
     local tab = setmetatable({
         Name = name,
         Window = self,
         Frame = viewport,
         Content = content,
-        Columns = sides,
         Button = nav,
-        Order = 0,
+        Label = caption,
+        Icon = image,
+        Outline = outline,
+        Groups = {},
     }, Tab)
     self.Tabs[name] = tab
     table.insert(self.TabOrder, tab)
+    self.NavOffset += width + 6
+    self.Navigation.CanvasSize = UDim2.fromOffset(self.NavOffset - 6, 0)
     nav.Activated:Connect(function()
         self:SelectTab(name)
     end)
@@ -1180,17 +1368,24 @@ function Window:SelectTab(name)
         Library._dropdown:SetOpen(false)
     end
     self.SelectedTab = name
+    self.GlobalSettings.Visible = false
+    self.Toast.Visible = false
+    self.Footer.Visible = true
     for _, tab in ipairs(self.TabOrder) do
         local selected = tab.Name == name
         tab.Frame.Visible = selected
-        tab.Button.BackgroundTransparency = selected and 0.35 or 1
-        tab.Button.TextColor3 = selected and Library.Theme.Text or Library.Theme.Muted
+        tab.Button.BackgroundTransparency = selected and 0.98 or 1
+        tab.Outline.Transparency = selected and 0.96 or 1
     end
+    self.Tabs[name]:Resize()
     return self.Tabs[name]
 end
 
 function Window:SetVisible(value)
     self.Frame.Visible = value == true
+    if not self.Frame.Visible then
+        self.GlobalSettings.Visible = false
+    end
     if not self.Frame.Visible and Library._dropdown then
         Library._dropdown:SetOpen(false)
     end
@@ -1219,7 +1414,15 @@ function Window:SetToggleKey(value)
     end
     assert(validKey(value), "Invalid menu key")
     self.ToggleKey = value
-    self.Hint.Text = value:upper() .. "  /  MENU"
+    local display = ({
+        LeftControl = "CTRL",
+        RightControl = "CTRL",
+        LeftAlt = "ALT",
+        RightAlt = "ALT",
+        LeftShift = "SHIFT",
+        RightShift = "SHIFT",
+    })[value] or value:upper()
+    self.Hint.Text = display .. "  /  MENU"
     return self
 end
 function Window:Destroy()
@@ -1231,6 +1434,9 @@ function Library:CreateWindow(info)
     info = info or {}
     local player = Players.LocalPlayer
     assert(player, "Vortex must run on the client")
+    local size = info.Size or Vector2.new(580, 460)
+    assert(typeof(size) == "Vector2" and size.X >= 400 and size.Y >= 300, "Invalid window size")
+    assert(info.Scale == nil or finite(info.Scale) and info.Scale > 0, "Scale must be positive")
     local gui = make("ScreenGui", {
         Name = "VortexUI",
         ResetOnSpawn = false,
@@ -1248,12 +1454,6 @@ function Library:CreateWindow(info)
             gui.Parent = player:WaitForChild("PlayerGui")
         end
     end
-    local size = info.Size or Vector2.new(580, 460)
-    assert(
-        typeof(size) == "Vector2" and size.X >= 400 and size.Y >= 300,
-        "Size must be a Vector2 of at least 400 × 300"
-    )
-    assert(info.Scale == nil or finite(info.Scale) and info.Scale > 0, "Scale must be positive")
     local frame = themed(
         make("Frame", {
             Name = "Window",
@@ -1267,56 +1467,78 @@ function Library:CreateWindow(info)
         { BackgroundColor3 = "Background" }
     )
     corner(frame, 10)
-    stroke(frame)
+    stroke(frame, 0.9)
     local scale = make("UIScale", { Scale = 1 }, frame)
     local header = button(frame)
     header.Name = "Header"
-    header.Size = UDim2.new(1, 0, 0, 48)
+    header.Size = UDim2.new(1, 0, 0, 49)
     local title = text(header, info.Title or "vortex", 20)
-    local titleWidth = math.clamp(#tostring(info.Title or "vortex") * 11, 80, size.X * 0.42)
-    title.Position = UDim2.fromOffset(22, 10)
-    title.Size = UDim2.fromOffset(titleWidth, 28)
-    themed(
-        make("Frame", {
-            Position = UDim2.fromOffset(30 + titleWidth, 16),
-            Size = UDim2.fromOffset(1, 18),
-            BorderSizePixel = 0,
-        }, header),
-        { BackgroundColor3 = "Border" }
-    )
-    local subtitle = text(header, info.Subtitle or "by shrak.", 10, "Muted")
-    subtitle.Position = UDim2.fromOffset(44 + titleWidth, 18)
-    subtitle.Size = UDim2.new(1, -100 - titleWidth, 0, 20)
-    local close = button(header, "×")
-    close.Position = UDim2.new(1, -42, 0, 12)
-    close.Size = UDim2.fromOffset(24, 24)
-    close.TextSize = 20
+    title.Position = UDim2.fromOffset(22, 11)
+    title.Size = UDim2.fromOffset(90, 24)
+    title.FontFace = Font.new("rbxassetid://12187365364", Enum.FontWeight.SemiBold)
+    title.TextTransparency = 0.2
+    title.TextYAlignment = Enum.TextYAlignment.Bottom
+    make("Frame", {
+        Position = UDim2.fromOffset(110, 16),
+        Size = UDim2.fromOffset(1, 18),
+        BackgroundColor3 = Color3.new(1, 1, 1),
+        BackgroundTransparency = 0.75,
+        BorderSizePixel = 0,
+    }, header)
+    local subtitle = text(header, info.Subtitle or "by shrak.", 10)
+    subtitle.Position = UDim2.fromOffset(124, 8)
+    subtitle.Size = UDim2.fromOffset(180, 24)
+    subtitle.FontFace = Font.new("rbxassetid://12187365364", Enum.FontWeight.SemiBold)
+    subtitle.TextTransparency = 0.5
+    subtitle.TextYAlignment = Enum.TextYAlignment.Bottom
     for _, y in ipairs({ 48, size.Y - 30 }) do
         themed(
             make("Frame", {
                 Position = UDim2.fromOffset(16, y),
                 Size = UDim2.new(1, -32, 0, 1),
                 BorderSizePixel = 0,
+                BackgroundTransparency = 0.9,
             }, frame),
-            { BackgroundColor3 = "Border" }
+            { BackgroundColor3 = "Text" }
         )
     end
     local navigation = make("ScrollingFrame", {
         Name = "Navigation",
         Position = UDim2.fromOffset(16, 57),
-        Size = UDim2.new(1, -32, 0, 36),
+        Size = UDim2.new(1, -32, 0, 34),
         BackgroundTransparency = 1,
         BorderSizePixel = 0,
         ScrollBarThickness = 0,
         CanvasSize = UDim2.new(),
-        AutomaticCanvasSize = Enum.AutomaticSize.X,
         ScrollingDirection = Enum.ScrollingDirection.X,
     }, frame)
-    list(navigation, 5, true)
+    local gear = button(header)
+    gear.Name = "GlobalSettings"
+    gear.Position = UDim2.new(1, -129, 0, 14)
+    gear.Size = UDim2.fromOffset(22, 22)
+    make("ImageLabel", {
+        Name = "Icon_gear",
+        Position = UDim2.fromOffset(3, 3),
+        Size = UDim2.fromOffset(16, 16),
+        BackgroundTransparency = 1,
+        Image = Library.Icons.gear,
+        ImageTransparency = 0.4,
+    }, gear)
+    local globalSettings = make("Frame", {
+        Name = "GlobalSettings",
+        Position = UDim2.new(1, -174, 0, 44),
+        Size = UDim2.fromOffset(158, 93),
+        BackgroundColor3 = Color3.fromRGB(20, 20, 20),
+        BorderSizePixel = 0,
+        Visible = false,
+        ZIndex = 60,
+    }, frame)
+    corner(globalSettings, 6)
+    stroke(globalSettings, 0.9)
     local userInfo = make("Frame", {
         Name = "UserInfo",
         Position = UDim2.new(0, 16, 1, -27),
-        Size = UDim2.fromOffset(190, 24),
+        Size = UDim2.fromOffset(200, 24),
         BackgroundTransparency = 1,
         Visible = info.ShowUserInfo ~= false,
     }, frame)
@@ -1326,75 +1548,108 @@ function Library:CreateWindow(info)
         BackgroundTransparency = 1,
         Image = "rbxthumb://type=AvatarBust&id=" .. player.UserId .. "&w=48&h=48",
     }, userInfo)
-    corner(avatar, 20)
+    corner(avatar, 100)
+    stroke(avatar, 0.9)
     local displayName = text(userInfo, player.DisplayName, 11)
-    displayName.Position = UDim2.fromOffset(32, 0)
-    displayName.Size = UDim2.fromOffset(155, 12)
-    local username = text(userInfo, "@" .. player.Name, 10, "Muted")
-    username.Position = UDim2.fromOffset(32, 12)
-    username.Size = UDim2.fromOffset(155, 12)
-    local footer = text(frame, info.Footer or "", 10, "Muted")
-    footer.Position = UDim2.new(0.36, 0, 1, -26)
-    footer.Size = UDim2.new(0.36, 0, 0, 22)
-    local hint = text(frame, "", 10, "Muted")
-    hint.Position = UDim2.new(1, -150, 1, -26)
-    hint.Size = UDim2.fromOffset(134, 22)
-    hint.TextXAlignment = Enum.TextXAlignment.Right
-    local launcher = button(gui, info.LauncherText or "V")
-    launcher.Name = "Launcher"
+    displayName.Position = UDim2.fromOffset(32, 1)
+    displayName.Size = UDim2.fromOffset(160, 12)
+    displayName.FontFace = Font.new("rbxassetid://12187365364", Enum.FontWeight.SemiBold)
+    displayName.TextTransparency = 0.25
+    local username = text(userInfo, "@" .. player.Name, 10)
+    username.Position = UDim2.fromOffset(32, 13)
+    username.Size = UDim2.fromOffset(160, 10)
+    username.TextTransparency = 0.65
+    local hint = text(frame, "CTRL  /  MENU", 10)
+    hint.Position = UDim2.new(1, -110, 1, -25)
+    hint.Size = UDim2.fromOffset(94, 20)
+    hint.FontFace = Font.new("rbxassetid://12187365364", Enum.FontWeight.SemiBold)
+    hint.TextTransparency = 0.55
+    local footer = text(frame, info.Footer or "", 11)
+    footer.Position = UDim2.new(0, 220, 1, -25)
+    footer.Size = UDim2.fromOffset(242, 18)
+    footer.TextTransparency = 0.15
+    local toast = text(frame, "", 11)
+    toast.Position = footer.Position
+    toast.Size = footer.Size
+    toast.TextTransparency = 0.15
+    toast.Visible = false
+    local launcherGui = make("ScreenGui", {
+        Name = "VortexLauncher",
+        ResetOnSpawn = false,
+        IgnoreGuiInset = true,
+        DisplayOrder = (info.DisplayOrder or 10000) + 1,
+        ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
+    }, gui.Parent)
+    table.insert(self._instances, launcherGui)
+    local launcher = button(launcherGui, info.LauncherText or "V")
+    launcher.Name = "MenuButton"
     launcher.Position = info.LauncherPosition or UDim2.fromOffset(22, 104)
     launcher.Size = UDim2.fromOffset(52, 52)
     launcher.BackgroundTransparency = 0.12
-    launcher.TextSize = 28
+    launcher.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+    launcher.TextSize = 38
+    launcher.Font = Enum.Font.GothamBlack
+    launcher.TextColor3 = Color3.fromRGB(245, 245, 245)
     launcher.Visible = info.ShowLauncher ~= false
-    themed(launcher, { BackgroundColor3 = "Surface", TextColor3 = "Accent" })
     corner(launcher, 16)
-    stroke(launcher)
-    local notifications = make("Frame", {
-        Name = "Notifications",
-        AnchorPoint = Vector2.new(1, 1),
-        Position = UDim2.new(1, -18, 1, -18),
-        Size = UDim2.fromOffset(280, 0),
-        AutomaticSize = Enum.AutomaticSize.Y,
-        BackgroundTransparency = 1,
-    }, gui)
-    local notificationLayout = list(notifications, 8)
-    notificationLayout.VerticalAlignment = Enum.VerticalAlignment.Bottom
+    local launcherOutline = stroke(launcher, 0.3)
+    launcherOutline.Color = Color3.fromRGB(102, 102, 102)
+    launcherOutline.Thickness = 3
+    self._bindings[launcherOutline] = nil
     local window = setmetatable({
         Gui = gui,
         Frame = frame,
         Title = title,
         Subtitle = subtitle,
         Footer = footer,
+        Toast = toast,
         UserInfo = userInfo,
         Hint = hint,
         Navigation = navigation,
         Launcher = launcher,
-        Notifications = notifications,
+        LauncherGui = launcherGui,
         Scale = scale,
         Tabs = {},
         TabOrder = {},
+        NavOffset = 0,
+        Size = size,
+        GlobalSettings = globalSettings,
     }, Window)
     self.Window = window
     window:SetToggleKey(info.ToggleKey or "LeftControl")
+    for index, setting in ipairs({ "UI Transparency", "Show User Info" }) do
+        local item = button(globalSettings)
+        item.Name = setting
+        item.Position = UDim2.fromOffset(10, 8 + (index - 1) * 38)
+        item.Size = UDim2.fromOffset(138, 33)
+        item.ZIndex = 61
+        local caption = text(item, setting, 12)
+        caption.Position = UDim2.fromOffset(4, 0)
+        caption.Size = UDim2.fromOffset(130, 33)
+        caption.ZIndex = 62
+        item.Activated:Connect(function()
+            if index == 1 then
+                frame.BackgroundTransparency = frame.BackgroundTransparency == 0 and 0.15 or 0
+            else
+                window:SetUserInfoVisible(not userInfo.Visible)
+            end
+        end)
+    end
+    gear.Activated:Connect(function()
+        if self._dropdown then
+            self._dropdown:SetOpen(false)
+        end
+        globalSettings.Visible = not globalSettings.Visible
+    end)
     local function fit()
         local viewport = gui.AbsoluteSize
         if viewport.X <= 0 or viewport.Y <= 0 then
             return
         end
         scale.Scale = math.max(0.05, math.min(info.Scale or 1, (viewport.X - 32) / size.X, (viewport.Y - 32) / size.Y))
-        local half = Vector2.new(size.X * scale.Scale / 2, size.Y * scale.Scale / 2)
-        local center = Vector2.new(
-            frame.Position.X.Scale * viewport.X + frame.Position.X.Offset,
-            frame.Position.Y.Scale * viewport.Y + frame.Position.Y.Offset
-        )
-        frame.Position = UDim2.fromOffset(
-            math.clamp(center.X, half.X, math.max(half.X, viewport.X - half.X)),
-            math.clamp(center.Y, half.Y, math.max(half.Y, viewport.Y - half.Y))
-        )
         launcher.Position = UDim2.fromOffset(
-            math.clamp(launcher.Position.X.Offset, 0, math.max(0, viewport.X - 52)),
-            math.clamp(launcher.Position.Y.Offset, 0, math.max(0, viewport.Y - 52))
+            math.clamp(launcher.Position.X.Offset, 8, math.max(8, viewport.X - 60)),
+            math.clamp(launcher.Position.Y.Offset, 8, math.max(8, viewport.Y - 60))
         )
     end
     self:Connect(gui:GetPropertyChangedSignal("AbsoluteSize"), fit)
@@ -1422,23 +1677,24 @@ function Library:CreateWindow(info)
                         draggedUntil = os.clock() + 0.2
                     end
                     target.Position = UDim2.fromOffset(
-                        math.clamp(start.X.Offset + delta.X, 0, math.max(0, viewport.X - 52)),
-                        math.clamp(start.Y.Offset + delta.Y, 0, math.max(0, viewport.Y - 52))
+                        math.clamp(start.X.Offset + delta.X, 8, math.max(8, viewport.X - 60)),
+                        math.clamp(start.Y.Offset + delta.Y, 8, math.max(8, viewport.Y - 60))
                     )
                 else
                     local half = frame.AbsoluteSize / 2
-                    local x = start.X.Scale * viewport.X + start.X.Offset + delta.X
-                    local y = start.Y.Scale * viewport.Y + start.Y.Offset + delta.Y
+                    local origin = gui.AbsolutePosition
+                    local x = start.X.Scale * viewport.X + start.X.Offset + origin.X + delta.X
+                    local y = start.Y.Scale * viewport.Y + start.Y.Offset + origin.Y + delta.Y
                     frame.Position = UDim2.fromOffset(
-                        math.clamp(x, half.X, math.max(half.X, viewport.X - half.X)),
-                        math.clamp(y, half.Y, math.max(half.Y, viewport.Y - half.Y))
+                        math.clamp(x, half.X, math.max(half.X, viewport.X - half.X)) - origin.X,
+                        math.clamp(y, half.Y, math.max(half.Y, viewport.Y - half.Y)) - origin.Y
                     )
                 end
             end,
         }
     end
     header.InputBegan:Connect(function(input)
-        if input.Position.X < close.AbsolutePosition.X then
+        if input.Position.X < header.AbsolutePosition.X + 448 * scale.Scale then
             beginDrag(frame, input)
         end
     end)
@@ -1449,9 +1705,6 @@ function Library:CreateWindow(info)
         if os.clock() >= draggedUntil then
             window:Toggle()
         end
-    end)
-    close.Activated:Connect(function()
-        window:SetVisible(false)
     end)
     self:Connect(UIS.InputChanged, function(input)
         local pointer = self._pointer

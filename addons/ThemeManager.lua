@@ -4,10 +4,10 @@ local ThemeManager = {
         Graphite = {
             Background = Color3.fromRGB(15, 15, 15),
             Surface = Color3.fromRGB(26, 26, 26),
-            Border = Color3.fromRGB(43, 43, 43),
-            Text = Color3.fromRGB(210, 210, 210),
-            Muted = Color3.fromRGB(135, 135, 135),
-            Accent = Color3.fromRGB(235, 235, 235),
+            Border = Color3.new(1, 1, 1),
+            Text = Color3.new(1, 1, 1),
+            Muted = Color3.fromRGB(165, 165, 165),
+            Accent = Color3.new(1, 1, 1),
             Track = Color3.fromRGB(60, 60, 60),
         },
         Midnight = {

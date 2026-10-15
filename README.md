@@ -12,7 +12,7 @@ local Library = loadstring(game:HttpGet("https://raw.githubusercontent.com/imshr
 local Window = Library:CreateWindow({
     Title = "vortex",
     Subtitle = "by shrak.",
-    Footer = "v1.0.0",
+    Footer = "v1.1.0",
 })
 
 local Main = Window:AddTab("Main", "rocket")
@@ -44,7 +44,7 @@ The HTTP loader requires an environment that provides `loadstring` and `game:Htt
 
 Toggles, buttons, sliders with numeric entry, inputs, searchable single and multi dropdowns, keybinds, color pickers with optional transparency, labels, and dividers. Controls support visibility and disabled states. Windows support mouse/touch dragging, viewport scaling, scrollable tabs and pages, notifications, a menu hotkey, and a draggable launcher.
 
-Use full-width groupboxes for the original Rattex layout. `AddLeftGroupbox` and `AddRightGroupbox` provide a two-column layout.
+Use full-width groupboxes for the compact single-card layout. Groupbox titles are hidden by default; enable `ShowTitle` when a visible heading is useful. `AddLeftGroupbox` and `AddRightGroupbox` provide a two-column layout.
 
 ## Studio
 

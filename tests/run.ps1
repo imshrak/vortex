@@ -15,6 +15,7 @@ foreach ($module in @(@('Library', 'Library.lua'), @('SaveManager', 'addons/Save
     $moduleSource = Get-Content -Raw -LiteralPath (Join-Path $projectRoot $module[1])
     $parts += "local $($module[0]) = (function()`n$moduleSource`nend)()"
 }
+$parts += Get-Content -Raw -LiteralPath (Join-Path $PSScriptRoot 'Appearance.luau')
 $parts += Get-Content -Raw -LiteralPath (Join-Path $PSScriptRoot 'Behavior.luau')
 $runnerPath = Join-Path ([System.IO.Path]::GetTempPath()) ('vortex-test-' + [guid]::NewGuid().ToString('N') + '.luau')
 try {

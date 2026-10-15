@@ -12,12 +12,12 @@
 | `Unloaded` | Whether `Unload` has run |
 | `CreateWindow(options)` | Create one window |
 | `SetTheme(colors)` | Update palette roles and repaint existing elements |
-| `Notify(message, duration?)` | Show a notification, including while the menu is hidden |
+| `Notify(message, duration?)` | Show a notification in the window footer |
 | `OnUnload(callback)` | Register synchronous cleanup |
 | `Unload()` | Disconnect global signals, destroy the GUI, and clear registries |
 | `Connect(signal, callback)` | Connect a signal that will be disconnected on unload |
 
-`Notify` accepts a string or `{ Title = "Saved", Description = "Configuration saved", Duration = 3 }`. It returns the notification Frame. Destroy that Frame to dismiss it early.
+`Notify` accepts a string or `{ Title = "Saved", Description = "Configuration saved", Duration = 3 }`. It returns the shared toast TextLabel. A newer message replaces the current toast.
 
 ## Window
 
@@ -25,7 +25,7 @@
 local Window = Library:CreateWindow({
     Title = "vortex",
     Subtitle = "by shrak.",
-    Footer = "v1.0.0",
+    Footer = "v1.1.0",
     Size = Vector2.new(580, 460),
     Position = UDim2.fromScale(0.5, 0.5),
     ToggleKey = "LeftControl",
@@ -39,7 +39,7 @@ local Window = Library:CreateWindow({
 })
 ```
 
-`Parent` optionally specifies a GUI container such as `PlayerGui`. Otherwise the library tries `gethui()` or `CoreGui`, then falls back to `PlayerGui`. `Size` is a Vector2 of at least 400 × 300. `Scale` sets the maximum scale; the window shrinks to fit the viewport. The close button hides the window. The launcher remains available.
+`Parent` optionally specifies a GUI container such as `PlayerGui`. Otherwise the library tries `gethui()` or `CoreGui`, then falls back to `PlayerGui`. `Size` is a Vector2 of at least 400 × 300. `Scale` sets the maximum scale; the window shrinks to fit the viewport. The header gear opens the UI transparency and user info settings. The menu key and launcher toggle visibility.
 
 | Method | Behavior |
 | --- | --- |
@@ -65,7 +65,7 @@ local Right = Main:AddRightGroupbox("Right")
 local Custom = Main:AddGroupbox({ Name = "Options", Side = "Full" })
 ```
 
-`Side` accepts `Full`, `Left`, or `Right`, case-insensitively. Full-width groupboxes appear first; paired columns follow. Both columns share the page scroll. `Tab:Select()` selects the tab. Groupboxes expose `Frame` and `Content`.
+`Side` accepts `Full`, `Left`, or `Right`, case-insensitively. Full-width groupboxes appear first; paired columns follow. Both columns share the page scroll. Groupbox headings are hidden by default to preserve the compact card layout; pass `ShowTitle = true` to display one. The first full-width card has a 288-pixel minimum height. Use `MinHeight` to override it. `Tab:Select()` selects the tab. Groupboxes expose `Frame` and `Content`.
 
 ## Shared control behavior
 
@@ -108,11 +108,11 @@ Group:AddSlider("Opacity", {
 ```lua
 Group:AddInput("Name", {
     Text = "Name", Default = "", Placeholder = "Enter a name",
-    Numeric = false, Finished = true, MaxLength = 64,
+    Numeric = false, Finished = true, MaxLength = 64, Width = 120,
 })
 ```
 
-Inputs store strings. `Numeric` accepts only finite numeric strings. `Finished = true` commits on focus loss; false updates valid values while typing. `MaxLength` is an optional byte limit.
+Inputs store strings. `Numeric` accepts only finite numeric strings. `Finished = true` commits on focus loss; false updates valid values while typing. `MaxLength` is an optional byte limit. `Width` sets the right-aligned field width in pixels; the default is 58.
 
 ## Dropdowns
 
@@ -127,7 +127,7 @@ Group:AddDropdown("Filters", {
 })
 ```
 
-`Values` must be an array of unique strings. A single dropdown stores a string or nil. A multi dropdown stores a dictionary of selected names to true. `Default` accepts a string or one-based index; multi dropdowns also accept a dictionary. `SetValues(array, silent?)` replaces choices and removes unavailable selections. `SetOpen(boolean)` expands/collapses the inline list. Only one dropdown is open at a time. Expanded lists have a bounded height and scroll internally.
+`Values` must be an array of unique strings. A single dropdown stores a string or nil. A multi dropdown stores a dictionary of selected names to true. `Default` accepts a string or one-based index; multi dropdowns also accept a dictionary. `SetValues(array, silent?)` replaces choices and removes unavailable selections. `SetOpen(boolean)` expands/collapses the inline list. Only one dropdown is open at a time. Lists expand inline and move the rows below them. All matches are visible by default; set `MaxVisibleDropdownItems` to bound the list height and enable internal scrolling.
 
 ## Key pickers
 
