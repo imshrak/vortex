@@ -26,10 +26,13 @@ jobs:
           Expand-Archive .tools/rojo-7.7.1-windows-x86_64.zip .tools -Force
       - name: Check formatting
         shell: pwsh
-        run: ./.tools/stylua.exe --check --syntax Luau Library.lua Example.lua addons examples tests
+        run: ./.tools/stylua.exe --check --syntax Luau Library.lua Designer.lua Example.lua addons designer examples tests
       - name: Compile and check behavior
         shell: pwsh
         run: ./tests/run.ps1 -Luau ./.tools/luau.exe -Compiler ./.tools/luau-compile.exe
       - name: Build Studio example
         shell: pwsh
-        run: ./.tools/rojo.exe build default.project.json --output .tools/VortexUI.rbxlx
+        run: |
+          ./.tools/rojo.exe build default.project.json --output .tools/VortexUI.rbxlx
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          ./.tools/rojo.exe build designer.project.json --output .tools/VortexDesigner.rbxlx

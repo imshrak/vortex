@@ -1,0 +1,18 @@
+{
+  "name": "Vortex Designer",
+  "tree": {
+    "$className": "DataModel",
+    "ReplicatedStorage": {
+      "Vortex": { "$path": "Library.lua" },
+      "VortexDesigner": {
+        "$path": "Designer.lua",
+        "Project": { "$path": "designer/Project.lua" }
+      }
+    },
+    "StarterPlayer": {
+      "StarterPlayerScripts": {
+        "VortexDesigner": { "$path": "examples/Designer.client.lua" }
+      }
+    }
+  }
+}

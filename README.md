@@ -2,7 +2,7 @@
 
 A compact Roblox UI library by [shrak](https://github.com/imshrak).
 
-[Documentation](docs/README.md) · [API reference](docs/API.md) · [Advanced example](examples/Advanced.lua)
+[Documentation](docs/README.md) · [Designer](docs/Designer.md) · [API reference](docs/API.md) · [Advanced example](examples/Advanced.lua)
 
 ## Quick start
 

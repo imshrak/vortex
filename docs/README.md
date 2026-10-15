@@ -9,4 +9,5 @@
 | [Layout and dependencies](Layout.md) | Tabs, columns, collapsible groups, tabboxes, conditional rows and sections |
 | [Dialogs and overlays](Dialogs.md) | Modal dialogs, footer notifications, watermark, keybind menu |
 | [Configuration](Configuration.md) | Profiles, autoload, exclusions, JSON import/export, storage integration |
+| [Designer](Designer.md) | Visual editor, live preview, project files, Lua export |
 | [API reference](API.md) | Core methods, examples, addon APIs, and links to detailed options |
