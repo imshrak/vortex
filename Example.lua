@@ -1,0 +1,84 @@
+local repo = "https://raw.githubusercontent.com/imshrak/vortex/main/"
+local Library = loadstring(game:HttpGet(repo .. "Library.lua"))()
+local ThemeManager = loadstring(game:HttpGet(repo .. "addons/ThemeManager.lua"))()
+local SaveManager = loadstring(game:HttpGet(repo .. "addons/SaveManager.lua"))()
+
+local Window = Library:CreateWindow({
+    Title = "vortex",
+    Subtitle = "by shrak.",
+    Footer = "v" .. Library.Version,
+    ToggleKey = Enum.KeyCode.LeftControl,
+    Size = Vector2.new(580, 460),
+})
+
+local Main = Window:AddTab("Main", "rocket")
+local Controls = Window:AddTab("Controls", "grid")
+local Settings = Window:AddTab("Settings", "gear")
+
+local General = Main:AddGroupbox("General")
+General:AddToggle("Enabled", { Text = "Enabled", Default = false })
+General:AddSlider("Intensity", { Text = "Intensity", Default = 50, Min = 0, Max = 100 })
+General:AddDropdown("Mode", { Text = "Mode", Values = { "Balanced", "Smooth", "Fast" }, Default = "Balanced" })
+General:AddInput("DisplayName", { Text = "Display name", Default = "Vortex", Placeholder = "Your name" })
+General:AddDivider()
+General:AddButton("Send notification", function()
+    Library:Notify("Hello from Vortex")
+end)
+
+local Selection = Controls:AddGroupbox("Selection")
+Selection:AddDropdown("Categories", {
+    Text = "Categories",
+    Values = { "Interface", "Audio", "Visuals", "Accessibility" },
+    Default = { Interface = true, Visuals = true },
+    Multi = true,
+    Searchable = true,
+})
+Selection:AddColorPicker("HighlightColor", {
+    Text = "Highlight color",
+    Default = Color3.fromRGB(150, 190, 255),
+    Transparency = 0,
+})
+Selection:AddKeyPicker("ActionKey", {
+    Text = "Action key",
+    Default = "F",
+    Mode = "Press",
+    Callback = function()
+        Library:Notify("Action key pressed")
+    end,
+})
+Selection:AddLabel("Click a keybind to rebind it. Escape cancels; Backspace clears.", true)
+
+local Interface = Settings:AddGroupbox("Interface")
+Interface:AddToggle("ShowUserInfo", { Text = "Show user info", Default = true })
+Interface:AddKeyPicker("MenuKey", {
+    Text = "Menu key",
+    Default = "LeftControl",
+    ChangedCallback = function(key)
+        Window:SetToggleKey(key)
+    end,
+})
+Interface:AddButton("Unload", function()
+    Library:Unload()
+end)
+
+Library.Toggles.Enabled:OnChanged(function(value)
+    Library:Notify(value and "Enabled" or "Disabled")
+end)
+Library.Toggles.ShowUserInfo:OnChanged(function(value)
+    Window:SetUserInfoVisible(value)
+end)
+
+ThemeManager:SetLibrary(Library)
+ThemeManager:ApplyToTab(Settings)
+SaveManager:SetLibrary(Library)
+SaveManager:SetFolder("VortexUI/Example")
+SaveManager:IgnoreThemeSettings()
+SaveManager:SetIgnoreIndexes({ "MenuKey" })
+SaveManager:BuildConfigSection(Settings)
+
+local loaded, err = SaveManager:LoadAutoloadConfig()
+if not loaded then
+    Library:Notify(err)
+end
+
+return Library

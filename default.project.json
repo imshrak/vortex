@@ -1,0 +1,20 @@
+{
+  "name": "Vortex",
+  "tree": {
+    "$className": "DataModel",
+    "ReplicatedStorage": {
+      "Vortex": {
+        "$path": "Library.lua",
+        "addons": {
+          "ThemeManager": { "$path": "addons/ThemeManager.lua" },
+          "SaveManager": { "$path": "addons/SaveManager.lua" }
+        }
+      }
+    },
+    "StarterPlayer": {
+      "StarterPlayerScripts": {
+        "VortexExample": { "$path": "examples/Studio.client.lua" }
+      }
+    }
+  }
+}

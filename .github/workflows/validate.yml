@@ -1,0 +1,30 @@
+name: Validate
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Luau and StyLua
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          New-Item -ItemType Directory -Force .tools | Out-Null
+          gh release download 0.742 --repo luau-lang/luau --pattern luau-windows.zip --dir .tools
+          Expand-Archive .tools/luau-windows.zip .tools -Force
+          gh release download v2.6.0 --repo JohnnyMorganz/StyLua --pattern stylua-windows-x86_64.zip --dir .tools
+          Expand-Archive .tools/stylua-windows-x86_64.zip .tools -Force
+      - name: Check formatting
+        shell: pwsh
+        run: ./.tools/stylua.exe --check --syntax Luau Library.lua Example.lua addons examples tests
+      - name: Compile and check behavior
+        shell: pwsh
+        run: ./tests/run.ps1 -Luau ./.tools/luau.exe -Compiler ./.tools/luau-compile.exe
