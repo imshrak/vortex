@@ -70,4 +70,3 @@ SaveManager:LoadAutoloadConfig()
 ```
 
 Create controls and attach callbacks before loading configs. IDs must be unique across `Library.Options` and `Library.Toggles`. Callbacks run when a value changes; construction does not invoke them. Config operations return `success, resultOrError`.
-
