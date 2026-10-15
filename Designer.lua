@@ -438,7 +438,8 @@ function Designer:_fitPreview()
     if not self.PreviewWindow or self.PreviewLibrary.Unloaded then
         return
     end
-    local size, available = self.PreviewWindow.Size, self.Stage.AbsoluteSize
+    local size = self.PreviewWindow.Size
+    local available = self.Stage.AbsoluteSize / self.Scale.Scale
     local scale = math.max(0.05, math.min(1, (available.X - 50) / size.X, (available.Y - 50) / size.Y))
     self.PreviewWindow.Scale.Scale = scale
     self.PreviewWindow.Frame.Position = UDim2.fromScale(0.5, 0.5)
@@ -481,6 +482,13 @@ function Designer:RenderPreview()
     window._fit = function()
         self:_fitPreview()
     end
+    library:Connect(window.Gui:GetPropertyChangedSignal("AbsoluteSize"), function()
+        task.defer(function()
+            if not self.Destroyed and self.PreviewWindow == window then
+                self:_fitPreview()
+            end
+        end)
+    end)
     library:OnUnload(function()
         if not self.Destroyed and not self.Rebuilding then
             task.defer(function()

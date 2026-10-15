@@ -119,6 +119,12 @@ verify(
     editor.Gui.Parent == playerGui and editor.PreviewWindow.Frame.Parent == editor.Stage,
     "Designer should embed its live preview"
 )
+editor.Scale.Scale = 0.5
+editor.Stage.AbsoluteSize = Vector2.new(378, 306)
+editor:_fitPreview()
+verify(editor.PreviewWindow.Scale.Scale == 1, "Small screens should scale the preview only once")
+editor.Scale.Scale = 1
+editor.Stage.AbsoluteSize = Vector2.new(756, 612)
 editor:Select("n3")
 editor.PropertyInputs.Text.Text = "Custom toggle"
 editor.PropertyInputs.Text.FocusLost:Fire()
