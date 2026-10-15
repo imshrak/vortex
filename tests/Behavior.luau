@@ -141,6 +141,13 @@ window.Launcher.Activated:Fire()
 check(not window.Frame.Visible, "Launcher drag should suppress accidental activation")
 window:Toggle()
 check(window.Frame.Visible, "Window should reopen programmatically")
+window.MinimizeButton.Activated:Fire()
+check(
+    not window.Frame.Visible and window.Launcher.Visible and not Library.Unloaded,
+    "Minimize should hide only the menu"
+)
+UIS.InputBegan:Fire(keyboard("LeftControl"), false)
+check(window.Frame.Visible, "Menu key should restore a minimized window")
 
 checks += verifyAppearance(Library, window, group, enabled, slider, input, dropdown, key)
 ThemeManager:SetLibrary(Library)
@@ -217,7 +224,7 @@ Library:OnUnload(function()
     unloaded = true
 end)
 local connections = table.clone(Library._connections)
-Library:Unload()
+window.CloseButton.Activated:Fire()
 Library:Unload()
 check(unloaded and Library.Unloaded and window.Gui.Destroyed, "Unload should be idempotent and destroy the UI")
 for _, connection in ipairs(connections) do

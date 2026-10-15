@@ -17,6 +17,17 @@ local function verifyAppearance(library, window, group, toggle, slider, input, d
     expect(position(window.Subtitle, 0, 124, 0, 8), "Subtitle must use the reference header inset")
     expect(position(window.Navigation, 0, 16, 0, 57), "Navigation must start at the reference position")
     expect(window.Navigation.Size.Y.Offset == 34, "Navigation must be 34 pixels tall")
+    expect(position(window.CloseButton, 1, -34, 0, 21), "Close dot must use the original top-right position")
+    expect(position(window.MinimizeButton, 1, -56, 0, 21), "Minimize dot must use the original top-right position")
+    expect(
+        window.CloseButton.Size.X.Offset == 8 and window.CloseButton.Size.Y.Offset == 8,
+        "Header dots must be eight pixels"
+    )
+    expect(window.CloseButton.BackgroundColor3 == Color3.fromRGB(255, 95, 87), "Close dot must use the original red")
+    expect(
+        window.MinimizeButton.BackgroundColor3 == Color3.fromRGB(255, 189, 46),
+        "Minimize dot must use the original yellow"
+    )
     expect(window.Tabs.Main.Button.Size.X.Offset == 64, "Main tab must retain its reference width")
     expect(
         window.Tabs.Main.Label.TextSize == 14 and window.Tabs.Main.Label.TextTransparency == 0.4,

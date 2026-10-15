@@ -25,7 +25,7 @@
 local Window = Library:CreateWindow({
     Title = "vortex",
     Subtitle = "by shrak.",
-    Footer = "v1.1.0",
+    Footer = "v1.1.1",
     Size = Vector2.new(580, 460),
     Position = UDim2.fromScale(0.5, 0.5),
     ToggleKey = "LeftControl",
@@ -39,7 +39,7 @@ local Window = Library:CreateWindow({
 })
 ```
 
-`Parent` optionally specifies a GUI container such as `PlayerGui`. Otherwise the library tries `gethui()` or `CoreGui`, then falls back to `PlayerGui`. `Size` is a Vector2 of at least 400 × 300. `Scale` sets the maximum scale; the window shrinks to fit the viewport. The header gear opens the UI transparency and user info settings. The menu key and launcher toggle visibility.
+`Parent` optionally specifies a GUI container such as `PlayerGui`. Otherwise the library tries `gethui()` or `CoreGui`, then falls back to `PlayerGui`. `Size` is a Vector2 of at least 400 × 300. `Scale` sets the maximum scale; the window shrinks to fit the viewport. The header gear opens the UI transparency and user info settings. The yellow header dot minimizes the window; the launcher or menu key restores it. The red header dot unloads the library, including its launcher. The third outlined dot is decorative, matching the original design.
 
 | Method | Behavior |
 | --- | --- |
@@ -53,7 +53,7 @@ local Window = Library:CreateWindow({
 | `SetToggleKey(key)` | Set a key name or EnumItem |
 | `Destroy()` | Unload the library |
 
-`Window.Tabs[name]` stores tabs. `Frame`, `Gui`, `Launcher`, and `Scale` expose their Roblox instances.
+`Window.Tabs[name]` stores tabs. `Frame`, `Gui`, `Launcher`, `Scale`, `CloseButton`, and `MinimizeButton` expose their Roblox instances.
 
 ## Tabs and groupboxes
 

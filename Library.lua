@@ -3,7 +3,7 @@ local UIS = game:GetService("UserInputService")
 local TweenService = game:GetService("TweenService")
 
 local Library = {
-    Version = "1.1.0",
+    Version = "1.1.1",
     Options = {},
     Toggles = {},
     Unloaded = false,
@@ -1641,6 +1641,35 @@ function Library:CreateWindow(info)
         end
         globalSettings.Visible = not globalSettings.Visible
     end)
+    for index, color in ipairs({
+        Color3.fromRGB(255, 95, 87),
+        Color3.fromRGB(255, 189, 46),
+        Color3.fromRGB(15, 15, 15),
+    }) do
+        local dot = make("TextButton", {
+            Name = index == 1 and "Close" or index == 2 and "Minimize" or "Maximize",
+            Position = UDim2.new(1, -34 - (index - 1) * 22, 0, 21),
+            Size = UDim2.fromOffset(8, 8),
+            BackgroundColor3 = color,
+            BorderSizePixel = 0,
+            Text = "",
+            AutoButtonColor = false,
+        }, header)
+        corner(dot, 100)
+        if index == 1 then
+            window.CloseButton = dot
+            dot.Activated:Connect(function()
+                self:Unload()
+            end)
+        elseif index == 2 then
+            window.MinimizeButton = dot
+            dot.Activated:Connect(function()
+                window:SetVisible(false)
+            end)
+        else
+            stroke(dot, 0.9)
+        end
+    end
     local function fit()
         local viewport = gui.AbsoluteSize
         if viewport.X <= 0 or viewport.Y <= 0 then
@@ -1694,7 +1723,7 @@ function Library:CreateWindow(info)
         }
     end
     header.InputBegan:Connect(function(input)
-        if input.Position.X < header.AbsolutePosition.X + 448 * scale.Scale then
+        if input.Position.X < header.AbsolutePosition.X + (size.X - 132) * scale.Scale then
             beginDrag(frame, input)
         end
     end)
