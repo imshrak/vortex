@@ -6,6 +6,7 @@
       "Vortex": {
         "$path": "Library.lua",
         "addons": {
+          "$className": "Folder",
           "ThemeManager": { "$path": "addons/ThemeManager.lua" },
           "SaveManager": { "$path": "addons/SaveManager.lua" }
         }

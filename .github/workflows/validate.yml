@@ -12,7 +12,7 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Install Luau and StyLua
+      - name: Install Luau, StyLua, and Rojo
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
@@ -22,9 +22,14 @@ jobs:
           Expand-Archive .tools/luau-windows.zip .tools -Force
           gh release download v2.6.0 --repo JohnnyMorganz/StyLua --pattern stylua-windows-x86_64.zip --dir .tools
           Expand-Archive .tools/stylua-windows-x86_64.zip .tools -Force
+          gh release download v7.7.1 --repo rojo-rbx/rojo --pattern rojo-7.7.1-windows-x86_64.zip --dir .tools
+          Expand-Archive .tools/rojo-7.7.1-windows-x86_64.zip .tools -Force
       - name: Check formatting
         shell: pwsh
         run: ./.tools/stylua.exe --check --syntax Luau Library.lua Example.lua addons examples tests
       - name: Compile and check behavior
         shell: pwsh
         run: ./tests/run.ps1 -Luau ./.tools/luau.exe -Compiler ./.tools/luau-compile.exe
+      - name: Build Studio example
+        shell: pwsh
+        run: ./.tools/rojo.exe build default.project.json --output .tools/VortexUI.rbxlx
