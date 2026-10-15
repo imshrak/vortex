@@ -219,6 +219,7 @@ SaveManager:SetStorage(originalStorage)
 SaveManager:BuildConfigSection(settings)
 check(Library.Options.VortexConfigList ~= nil, "Config UI should build")
 
+checks += verifyCustomization(Library, window, SaveManager, ThemeManager)
 local unloaded = false
 Library:OnUnload(function()
     unloaded = true

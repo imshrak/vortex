@@ -88,31 +88,90 @@ function SaveManager:IgnoreThemeSettings()
     return self:SetIgnoreIndexes({ "VortexTheme", "VortexAccent" })
 end
 
+function SaveManager:_build()
+    assert(self.Library and not self.Library.Unloaded, "Set an active Library first")
+    local data = { Version = 1, Objects = {} }
+    local function collect(options)
+        for id, option in pairs(options) do
+            if not self.Ignore[id] and option.Save ~= false then
+                local entry = { Type = option.Type, Value = option.Value }
+                if option.Type == "ColorPicker" then
+                    entry.Value = option.Value:ToHex()
+                    entry.Transparency = option.Transparency
+                elseif option.Type == "KeyPicker" then
+                    entry.Value = { option.Value, option.Mode }
+                end
+                data.Objects[id] = entry
+            end
+        end
+    end
+    collect(self.Library.Toggles)
+    collect(self.Library.Options)
+    return data
+end
+
+function SaveManager:Export()
+    return protect(function()
+        return HttpService:JSONEncode(self:_build())
+    end)
+end
+
+function SaveManager:Import(json)
+    return protect(function()
+        assert(type(json) == "string", "Import expects a JSON string")
+        self:_apply(HttpService:JSONDecode(json))
+    end)
+end
+
 function SaveManager:Save(name)
     return protect(function()
         assert(self.Library and not self.Library.Unloaded, "Set an active Library before saving")
         assert(validName(name), "Config names may contain letters, numbers, underscores, and hyphens")
         local storage = self:_storage()
         self:_prepare(storage)
-        local data = { Version = 1, Objects = {} }
-        local function collect(options)
-            for id, option in pairs(options) do
-                if not self.Ignore[id] then
-                    local entry = { Type = option.Type, Value = option.Value }
-                    if option.Type == "ColorPicker" then
-                        entry.Value = option.Value:ToHex()
-                        entry.Transparency = option.Transparency
-                    elseif option.Type == "KeyPicker" then
-                        entry.Value = { option.Value, option.Mode }
-                    end
-                    data.Objects[id] = entry
-                end
-            end
-        end
-        collect(self.Library.Toggles)
-        collect(self.Library.Options)
+        local data = self:_build()
         storage.writefile(self.Folder .. "/settings/" .. name .. ".json", HttpService:JSONEncode(data))
     end)
+end
+
+function SaveManager:_apply(data)
+    assert(self.Library and not self.Library.Unloaded, "Set an active Library first")
+    assert(type(data) == "table" and data.Version == 1 and type(data.Objects) == "table", "Unsupported config format")
+    local pending = {}
+    for id, entry in pairs(data.Objects) do
+        local option = self.Library.Toggles[id] or self.Library.Options[id]
+        if option and not self.Ignore[id] and option.Save ~= false then
+            assert(type(entry) == "table" and entry.Type == option.Type, "Control type mismatch: " .. id)
+            local value = entry.Value
+            if option.Type == "ColorPicker" then
+                assert(type(value) == "string" and value:match("^%x%x%x%x%x%x$"), "Invalid color: " .. id)
+                value = Color3.fromHex(value)
+                local alpha = entry.Transparency
+                assert(
+                    type(alpha) == "number" and alpha == alpha and alpha >= 0 and alpha <= 1,
+                    "Invalid transparency: " .. id
+                )
+            end
+            assert(option:Validate(value), "Invalid value for control: " .. id)
+            table.insert(pending, { Option = option, Value = value, Transparency = entry.Transparency })
+        end
+    end
+    table.sort(pending, function(a, b)
+        if a.Option.Id == "VortexTheme" then
+            return b.Option.Id ~= "VortexTheme"
+        end
+        if b.Option.Id == "VortexTheme" then
+            return false
+        end
+        return a.Option.Id < b.Option.Id
+    end)
+    for _, item in ipairs(pending) do
+        if item.Option.Type == "ColorPicker" then
+            item.Option:SetValueRGB(item.Value, item.Transparency)
+        else
+            item.Option:SetValue(item.Value)
+        end
+    end
 end
 
 function SaveManager:Load(name)
@@ -123,45 +182,7 @@ function SaveManager:Load(name)
         local path = self.Folder .. "/settings/" .. name .. ".json"
         assert(storage.isfile(path), "Config does not exist: " .. name)
         local data = HttpService:JSONDecode(storage.readfile(path))
-        assert(
-            type(data) == "table" and data.Version == 1 and type(data.Objects) == "table",
-            "Unsupported config format"
-        )
-        local pending = {}
-        for id, entry in pairs(data.Objects) do
-            local option = self.Library.Toggles[id] or self.Library.Options[id]
-            if option and not self.Ignore[id] then
-                assert(type(entry) == "table" and entry.Type == option.Type, "Control type mismatch: " .. id)
-                local value = entry.Value
-                if option.Type == "ColorPicker" then
-                    assert(type(value) == "string" and value:match("^%x%x%x%x%x%x$"), "Invalid color: " .. id)
-                    value = Color3.fromHex(value)
-                    local alpha = entry.Transparency
-                    assert(
-                        type(alpha) == "number" and alpha == alpha and alpha >= 0 and alpha <= 1,
-                        "Invalid transparency: " .. id
-                    )
-                end
-                assert(option:Validate(value), "Invalid value for control: " .. id)
-                table.insert(pending, { Option = option, Value = value, Transparency = entry.Transparency })
-            end
-        end
-        table.sort(pending, function(a, b)
-            if a.Option.Id == "VortexTheme" then
-                return b.Option.Id ~= "VortexTheme"
-            end
-            if b.Option.Id == "VortexTheme" then
-                return false
-            end
-            return a.Option.Id < b.Option.Id
-        end)
-        for _, item in ipairs(pending) do
-            if item.Option.Type == "ColorPicker" then
-                item.Option:SetValueRGB(item.Value, item.Transparency)
-            else
-                item.Option:SetValue(item.Value)
-            end
-        end
+        self:_apply(data)
     end)
 end
 
@@ -239,9 +260,9 @@ function SaveManager:LoadAutoloadConfig()
     return self:Load(name)
 end
 
-function SaveManager:BuildConfigSection(tab)
+function SaveManager:BuildConfigSection(tab, options)
     assert(self.Library, "Call SetLibrary first")
-    local group = tab:AddGroupbox("Configuration")
+    local group = tab.AddGroupbox and tab:AddGroupbox(options or "Configuration") or tab
     local library = self.Library
     local name = group:AddInput("VortexConfigName", { Text = "Config name", Placeholder = "default" })
     local ok, names = self:RefreshConfigList()

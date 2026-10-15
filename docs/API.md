@@ -1,5 +1,9 @@
 # API
 
+[Documentation home](README.md) · [Window and appearance](Customization.md) · [Controls](Controls.md) · [Layout](Layout.md) · [Dialogs](Dialogs.md) · [Configuration](Configuration.md)
+
+Vortex v1.2 adds opt-in customization while preserving the default compact layout. The guides above include complete option tables and advanced examples.
+
 ## Library
 
 | Member | Purpose |
@@ -12,6 +16,12 @@
 | `Unloaded` | Whether `Unload` has run |
 | `CreateWindow(options)` | Create one window |
 | `SetTheme(colors)` | Update palette roles and repaint existing elements |
+| `SetStyle(options)` | Update fonts, spacing, corners, and animation duration |
+| `GetStyle()`, `GetTheme()` | Return copies of current settings |
+| `ResetAll(ignoreIDs?)` | Reset indexed controls to their initial values |
+| `Dialog(options)` | Open a modal dialog |
+| `SetWatermark(text, options?)` | Show or hide a watermark |
+| `SetKeybindsVisible(visible, options?)` | Show or hide the keybind menu |
 | `Notify(message, duration?)` | Show a notification in the window footer |
 | `OnUnload(callback)` | Register synchronous cleanup |
 | `Unload()` | Disconnect global signals, destroy the GUI, and clear registries |
@@ -25,7 +35,7 @@
 local Window = Library:CreateWindow({
     Title = "vortex",
     Subtitle = "by shrak.",
-    Footer = "v1.1.3",
+    Footer = "v1.2.0",
     Size = Vector2.new(580, 460),
     Position = UDim2.fromScale(0.5, 0.5),
     ToggleKey = "LeftControl",
@@ -43,14 +53,22 @@ local Window = Library:CreateWindow({
 
 | Method | Behavior |
 | --- | --- |
-| `AddTab(name, icon?)` | Add a uniquely named tab; icon can be a named icon or asset ID |
+| `AddTab(name, icon?)` | Add a tab; also accepts `{ Name, Icon, Width, Visible }` |
 | `SelectTab(name)` | Select a tab; returns it |
 | `SetVisible(boolean)` | Show/hide the window |
-| `Toggle()` | Toggle window visibility |
+| `Toggle(visible?)` | Toggle visibility or force a boolean state |
 | `SetTitle(text)` | Change title text |
 | `SetFooter(text)` | Change footer text |
 | `SetUserInfoVisible(boolean)` | Show/hide avatar and user details |
 | `SetToggleKey(key)` | Set a key name or EnumItem |
+| `SetSize(Vector2)` | Resize within configured bounds and reflow content |
+| `SetPosition(UDim2)`, `Center()` | Position the window |
+| `SetScale(number)`, `SetTransparency(number)` | Change presentation |
+| `SetSubtitle(text)` | Change the subtitle |
+| `SetResizable(boolean)` | Show or hide the resize handle |
+| `SetHeaderButtons(table)` | Choose visible Settings/Minimize/Close actions |
+| `SetLauncherVisible(boolean)` | Show or hide the launcher |
+| `OnResize(callback)`, `OnToggle(callback)` | Observe window changes |
 | `Destroy()` | Unload the library |
 
 `Window.Tabs[name]` stores tabs. `Frame`, `Gui`, `Launcher`, `Scale`, `SettingsButton`, `CloseButton`, and `MinimizeButton` expose their Roblox instances.
@@ -79,9 +97,15 @@ Indexed controls take `id, options`. IDs must be nonempty strings and unique acr
 | `SetText(text)` | Change label text |
 | `SetVisible(boolean)` | Change visibility and close an open picker |
 | `SetDisabled(boolean)` | Block user interaction; programmatic updates still work |
+| `SetTooltip(text, disabledText?)` | Change hover guidance |
+| `DependsOn(conditions, mode?)` | Bind visibility or editing to other controls |
+| `Reset(silent?)` | Restore the original value |
+| `Destroy()` | Remove the control and free its ID |
 | `Frame`, `Label` | Underlying Roblox instances |
 
 Callbacks run through `task.spawn` with protected error handling. Changes to the same value do not emit again. Dropdown tables are copied before storage and callback delivery; update selections through `SetValue` rather than mutating `Value` directly. Register callbacks before loading configs. Keybind `OnChanged` reports binding changes; `OnClick` reports activation.
+
+[Common options and lifecycle](Controls.md#common-options) also cover tooltips, persistence exclusions, and dependency rules.
 
 ## Toggles and buttons
 
@@ -91,7 +115,7 @@ Group:AddButton("Run action", function() print("Pressed") end)
 Group:AddButton({ Text = "Run action", Func = function() print("Pressed") end })
 ```
 
-Toggles store booleans in `Library.Toggles`. Buttons are unindexed and expose `Press()` and `Button`.
+Toggles store booleans in `Library.Toggles`. `AddCheckbox` uses the same boolean API with a square indicator. Buttons are unindexed and expose `Press()` and `Button`; `DoubleClick = true` requires a second click within three seconds.
 
 ## Sliders
 
@@ -101,7 +125,7 @@ Group:AddSlider("Opacity", {
 })
 ```
 
-`Min` and `Max` default to 0 and 100. `Max` must exceed `Min`. `Rounding` is the number of decimal places, from 0 to 6. Values are rounded and clamped. Sliders accept mouse/touch dragging and numeric text entry. NaN and infinite values are rejected.
+`Min` and `Max` default to 0 and 100. `Max` must exceed `Min`. `Rounding` is the number of decimal places, from 0 to 6. Values are rounded and clamped. Optional `Step` snaps values and `Suffix` adds display units; `SetRange` and `SetSuffix` update them at runtime. See [slider options](Controls.md#sliders). Sliders accept mouse/touch dragging and numeric text entry. NaN and infinite values are rejected.
 
 ## Inputs
 
@@ -112,7 +136,7 @@ Group:AddInput("Name", {
 })
 ```
 
-Inputs store strings. `Numeric` accepts only finite numeric strings. `Finished = true` commits on focus loss; false updates valid values while typing. `MaxLength` is an optional byte limit. `Width` sets the right-aligned field width in pixels; the default is 58.
+Inputs store strings. Optional `Validator`, `Multiline`, `Height`, and `AllowEmpty` options are covered in [input options](Controls.md#inputs). `Numeric` accepts only finite numeric strings. `Finished = true` commits on focus loss; false updates valid values while typing. `MaxLength` is an optional byte limit. `Width` sets the right-aligned field width in pixels; the default is 58.
 
 ## Dropdowns
 
@@ -127,7 +151,7 @@ Group:AddDropdown("Filters", {
 })
 ```
 
-`Values` must be an array of unique strings. A single dropdown stores a string or nil. A multi dropdown stores a dictionary of selected names to true. `Default` accepts a string or one-based index; multi dropdowns also accept a dictionary. `SetValues(array, silent?)` replaces choices and removes unavailable selections. `SetOpen(boolean)` expands/collapses the inline list. Only one dropdown is open at a time. Lists expand inline and move the rows below them. All matches are visible by default; set `MaxVisibleDropdownItems` to bound the list height and enable internal scrolling.
+`Values` accepts unique string arrays, dictionaries of string IDs to labels, or provider functions. `AllowNull`, `DisabledValues`, formatting, and dynamic refresh are covered in [dropdown options](Controls.md#dropdowns). A single dropdown stores a string or nil. A multi dropdown stores a dictionary of selected names to true. `Default` accepts a string or one-based index; multi dropdowns also accept a dictionary. `SetValues(array, silent?)` replaces choices and removes unavailable selections. `SetOpen(boolean)` expands/collapses the inline list. Only one dropdown is open at a time. Lists expand inline and move the rows below them. All matches are visible by default; set `MaxVisibleDropdownItems` to bound the list height and enable internal scrolling.
 
 ## Key pickers
 
@@ -167,6 +191,10 @@ Group:AddLabel("A longer label that wraps to fit the groupbox.", true)
 Group:AddDivider()
 ```
 
+## Additional controls and layout
+
+`AddParagraph`, `AddImage`, `AddCheckbox`, and confirmation buttons are covered in the [control guide](Controls.md). [Layout and dependencies](Layout.md) covers tab visibility/renaming, collapsible groupboxes, tabboxes, and conditional sections. [Dialogs and overlays](Dialogs.md) covers modal buttons, watermark and keybind menu placement.
+
 ## ThemeManager
 
 | Method | Behavior |
@@ -175,7 +203,10 @@ Group:AddDivider()
 | `SetDefault(name)` | Choose the initial theme |
 | `AddTheme(name, colors)` | Register a custom palette; omitted roles inherit Graphite |
 | `ApplyTheme(name)` | Apply a named theme |
-| `ApplyToTab(tab)` | Add the theme selector and accent picker |
+| `ApplyToTab(tab, groupOptions?)` | Add the theme selector and accent picker |
+| `ApplyToGroupbox(group)` | Add theme controls to an existing group |
+| `GetThemeNames()` | Return sorted theme names |
+| `GetTheme(name)` | Return a palette copy |
 
 Built-in themes: `Graphite`, `Midnight`, `Rose`. Palette roles: `Background`, `Surface`, `Border`, `Text`, `Muted`, `Accent`, `Track`. Each role takes a Color3. To change just the accent directly, call `Library:SetTheme({ Accent = color })`.
 
@@ -189,16 +220,18 @@ Built-in themes: `Graphite`, `Midnight`, `Rose`. Palette roles: `Background`, `S
 | `SetIgnoreIndexes({ id, ... })` | Add IDs to the exclusion set |
 | `IgnoreThemeSettings()` | Exclude theme selector and accent picker |
 | `Save(name)` | Write a named JSON configuration |
+| `Export()` | Return `success, JSONOrError` without file access |
+| `Import(json)` | Validate and apply a JSON configuration |
 | `Load(name)` | Validate all recognized values, then apply them |
 | `Delete(name)` | Delete a config and clear its autoload pointer if selected |
 | `RefreshConfigList()` | Return `success, sortedNamesOrError` |
 | `SetAutoloadConfig(name)` | Select an existing config for loading on startup |
 | `ClearAutoloadConfig()` | Remove the autoload selection |
 | `LoadAutoloadConfig()` | Load the selected config, if any |
-| `BuildConfigSection(tab)` | Add save/load/delete/refresh/autoload controls |
+| `BuildConfigSection(tabOrGroup, groupOptions?)` | Add save/load/delete/refresh/autoload controls |
 
 File operations return `true, result` or `false, error`; errors are caught. Config names use letters, digits, underscores, or hyphens, up to 64 characters. Files are stored at `<folder>/settings/<name>.json`; autoload uses `<folder>/autoload.txt`. There is no periodic autosave. Call `Save` when you want to persist current values.
 
-Unknown control IDs are skipped when loading. Invalid values or type mismatches for existing controls reject the config before any values are applied. Sliders clamp numeric values to their current range. Loading emits normal change callbacks. Saved keybinds include their mode; saved colors include transparency.
+Controls with `Save = false` are excluded from both saving and loading. Unknown control IDs are skipped when loading. Invalid values or type mismatches for existing controls reject the config before any values are applied. Sliders clamp numeric values to their current range. Loading emits normal change callbacks. Saved keybinds include their mode; saved colors include transparency.
 
 Use `IgnoreThemeSettings` when theme selection should remain independent of game settings. The generated config name/list controls always exclude themselves from saved configs.

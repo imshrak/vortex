@@ -56,7 +56,7 @@ local UDim = {
 }
 local UDim2 = {}
 function UDim2.new(xs, xo, ys, yo)
-    return { X = UDim.new(xs or 0, xo or 0), Y = UDim.new(ys or 0, yo or 0) }
+    return typed("UDim2", { X = UDim.new(xs or 0, xo or 0), Y = UDim.new(ys or 0, yo or 0) })
 end
 function UDim2.fromOffset(x, y)
     return UDim2.new(0, x, 0, y)
@@ -123,8 +123,8 @@ local Enum = setmetatable({}, {
     end,
 })
 local Font = {
-    new = function(...)
-        return { ... }
+    new = function(family, weight, style)
+        return typed("Font", { Family = family, Weight = weight, Style = style })
     end,
 }
 local TweenInfo = {
@@ -161,6 +161,23 @@ function instanceMethods:IsA(class)
 end
 function instanceMethods:GetChildren()
     return table.clone(self._children)
+end
+function instanceMethods:GetDescendants()
+    local result = {}
+    for _, child in ipairs(self._children) do
+        table.insert(result, child)
+        for _, descendant in ipairs(child:GetDescendants()) do
+            table.insert(result, descendant)
+        end
+    end
+    return result
+end
+function instanceMethods:FindFirstChild(name)
+    for _, child in ipairs(self._children) do
+        if child.Name == name then
+            return child
+        end
+    end
 end
 function instanceMethods:GetPropertyChangedSignal(key)
     if not self._signals[key] then
@@ -213,6 +230,8 @@ function Instance.new(class)
         InputBegan = signal(),
         FocusLost = signal(),
         Text = "",
+        TextBounds = Vector2.new(0, 0),
+        FontFace = Font.new("rbxassetid://12187365364", Enum.FontWeight.Medium),
     }
     local object = { _children = {}, _signals = {}, _properties = properties }
     return setmetatable(object, {

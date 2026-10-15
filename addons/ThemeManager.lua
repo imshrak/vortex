@@ -8,7 +8,7 @@ local ThemeManager = {
             Text = Color3.new(1, 1, 1),
             Muted = Color3.fromRGB(165, 165, 165),
             Accent = Color3.new(1, 1, 1),
-            Track = Color3.fromRGB(60, 60, 60),
+            Track = Color3.fromRGB(87, 87, 87),
         },
         Midnight = {
             Background = Color3.fromRGB(13, 16, 24),
@@ -65,7 +65,7 @@ function ThemeManager:SetDefault(name)
     return self
 end
 
-function ThemeManager:ApplyToTab(tab)
+function ThemeManager:ApplyToGroupbox(group)
     assert(self.Library, "Call SetLibrary first")
     local names = {}
     for name in pairs(self.Themes) do
@@ -73,7 +73,6 @@ function ThemeManager:ApplyToTab(tab)
     end
     table.sort(names)
     self:ApplyTheme(self.DefaultTheme)
-    local group = tab:AddGroupbox("Appearance")
     group:AddDropdown("VortexTheme", {
         Text = "Theme",
         Values = names,
@@ -92,6 +91,22 @@ function ThemeManager:ApplyToTab(tab)
         end,
     })
     return group
+end
+
+function ThemeManager:GetThemeNames()
+    local names = {}
+    for name in pairs(self.Themes) do
+        table.insert(names, name)
+    end
+    table.sort(names)
+    return names
+end
+function ThemeManager:GetTheme(name)
+    assert(self.Themes[name], "Unknown theme")
+    return table.clone(self.Themes[name])
+end
+function ThemeManager:ApplyToTab(tab, options)
+    return self:ApplyToGroupbox(tab:AddGroupbox(options or "Appearance"))
 end
 
 return ThemeManager
