@@ -10,6 +10,7 @@ For Studio, sync [designer.project.json](../designer.project.json) with Rojo and
 
 ## Editing
 
+- Drag the header to move the designer with mouse or touch. Its position stays inside the viewport.
 - Select a window, tab, group, or control in the outline. Click controls on the canvas to select them.
 - Add tabs and groups with the outline buttons. Use Insert to add controls to the selected group.
 - Edit labels, IDs, defaults, options, and layout in Properties. Use Theme and Style for colors, typography, spacing, and corners.

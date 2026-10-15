@@ -228,6 +228,8 @@ function Instance.new(class)
         MouseEnter = signal(),
         MouseLeave = signal(),
         InputBegan = signal(),
+        InputEnded = signal(),
+        Focused = signal(),
         FocusLost = signal(),
         Text = "",
         TextBounds = Vector2.new(0, 0),
@@ -292,14 +294,17 @@ local services = {
     CoreGui = Instance.new("CoreGui"),
     TweenService = {
         Create = function(_, target, _, properties)
-            return {
-                Play = function()
-                    for key, value in pairs(properties) do
-                        target[key] = value
-                    end
-                end,
-                Cancel = function() end,
-            }
+            local tween = { Completed = signal() }
+            tween.Play = function()
+                for key, value in pairs(properties) do
+                    target[key] = value
+                end
+                tween.Completed:Fire(Enum.PlaybackState.Completed)
+            end
+            tween.Cancel = function()
+                tween.Completed:Fire(Enum.PlaybackState.Cancelled)
+            end
+            return tween
         end,
     },
     HttpService = HttpService,

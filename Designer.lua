@@ -1,22 +1,78 @@
 local Players = game:GetService("Players")
 local UIS = game:GetService("UserInputService")
 local HttpService = game:GetService("HttpService")
+local TweenService = game:GetService("TweenService")
 
 local Designer = {}
 Designer.__index = Designer
-Designer.Version = "1.0.0"
+Designer.Version = "1.1.0"
 
 local palette = {
-    Background = Color3.fromRGB(15, 16, 19),
-    Surface = Color3.fromRGB(22, 23, 27),
-    Field = Color3.fromRGB(30, 31, 37),
-    Border = Color3.fromRGB(47, 49, 57),
-    Text = Color3.fromRGB(230, 231, 237),
-    Muted = Color3.fromRGB(135, 139, 153),
-    Accent = Color3.fromRGB(159, 149, 255),
-    Selected = Color3.fromRGB(48, 43, 73),
+    Background = Color3.fromRGB(15, 15, 15),
+    Surface = Color3.fromRGB(19, 19, 19),
+    Field = Color3.fromRGB(26, 26, 26),
+    Border = Color3.fromRGB(37, 37, 37),
+    Text = Color3.fromRGB(222, 222, 222),
+    Muted = Color3.fromRGB(143, 143, 143),
+    Accent = Color3.fromRGB(235, 235, 235),
+    Selected = Color3.fromRGB(33, 33, 33),
+    Hover = Color3.fromRGB(39, 39, 39),
     Error = Color3.fromRGB(238, 147, 153),
 }
+
+local motions = setmetatable({}, { __mode = "k" })
+local function animate(object, properties, duration)
+    local active = motions[object] or {}
+    motions[object] = active
+    for property, value in pairs(properties) do
+        local previous = active[property]
+        if previous and previous.Value == value then
+            continue
+        end
+        if previous then
+            previous.Tween:Cancel()
+        end
+        if object[property] == value then
+            continue
+        end
+        local tween = TweenService:Create(
+            object,
+            TweenInfo.new(duration or 0.14, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+            { [property] = value }
+        )
+        local entry = { Tween = tween, Value = value }
+        active[property] = entry
+        local connection
+        connection = tween.Completed:Connect(function()
+            if active[property] == entry then
+                active[property] = nil
+            end
+            connection:Disconnect()
+        end)
+        tween:Play()
+    end
+end
+
+local function cancelMotion(object, property)
+    local active = motions[object]
+    if active and active[property] then
+        active[property].Tween:Cancel()
+    end
+end
+
+local function cancelTree(root)
+    local objects = root:GetDescendants()
+    table.insert(objects, root)
+    for _, object in ipairs(objects) do
+        local active = motions[object]
+        if active then
+            for _, entry in pairs(table.clone(active)) do
+                entry.Tween:Cancel()
+            end
+            motions[object] = nil
+        end
+    end
+end
 
 local function make(class, properties, parent)
     local object = Instance.new(class)
@@ -39,8 +95,8 @@ local function outline(object, color)
     )
 end
 
-local function frame(parent, name, position, size, color)
-    return make("Frame", {
+local function frame(parent, name, position, size, color, class)
+    return make(class or "Frame", {
         Name = name,
         Position = position,
         Size = size,
@@ -58,14 +114,253 @@ local function text(parent, value, position, size, color, fontSize)
         BackgroundTransparency = 1,
         BorderSizePixel = 0,
         TextColor3 = color or palette.Text,
-        Font = Enum.Font.Gotham,
+        FontFace = Font.new("rbxassetid://12187365364", Enum.FontWeight.Medium),
         TextSize = fontSize or 12,
         TextXAlignment = Enum.TextXAlignment.Left,
         TextTruncate = Enum.TextTruncate.AtEnd,
     }, parent)
 end
 
-local function button(parent, caption, position, size, callback, accent)
+local function icon(parent, name, position, color)
+    local root = frame(parent, "Icon_" .. name, position, UDim2.fromOffset(16, 16))
+    root.BackgroundTransparency = 1
+    local parts = {}
+    local function line(x1, y1, x2, y2, thickness)
+        local dx, dy = x2 - x1, y2 - y1
+        local item = frame(
+            root,
+            "Stroke",
+            UDim2.fromOffset((x1 + x2) / 2, (y1 + y2) / 2),
+            UDim2.fromOffset(math.sqrt(dx * dx + dy * dy), thickness or 1.3),
+            color or palette.Muted
+        )
+        item.AnchorPoint, item.Rotation = Vector2.new(0.5, 0.5), math.deg(math.atan2(dy, dx))
+        corner(item, 1)
+        table.insert(parts, { item, "BackgroundColor3" })
+    end
+    local function rect(x, y, width, height, radius)
+        local item = frame(root, "Shape", UDim2.fromOffset(x, y), UDim2.fromOffset(width, height))
+        item.BackgroundTransparency = 1
+        corner(item, radius or 2)
+        local border = outline(item, color or palette.Muted)
+        border.Thickness = 1.2
+        table.insert(parts, { border, "Color" })
+    end
+    local function dot(x, y, radius)
+        local item = frame(
+            root,
+            "Dot",
+            UDim2.fromOffset(x - radius, y - radius),
+            UDim2.fromOffset(radius * 2, radius * 2),
+            color or palette.Muted
+        )
+        corner(item, 100)
+        table.insert(parts, { item, "BackgroundColor3" })
+    end
+    if name == "Undo" or name == "Redo" then
+        local function stroke(x1, y1, x2, y2)
+            if name == "Redo" then
+                x1, x2 = 16 - x1, 16 - x2
+            end
+            line(x1, y1, x2, y2)
+        end
+        stroke(13, 12, 13, 9)
+        stroke(13, 9, 10, 6)
+        stroke(10, 6, 3, 6)
+        stroke(3, 6, 6, 3)
+        stroke(3, 6, 6, 9)
+    elseif name == "New" then
+        rect(3, 2, 10, 12)
+        line(5, 8, 11, 8)
+        line(8, 5, 8, 11)
+    elseif name == "Open" or name == "Group" then
+        rect(2, 5, 12, 9)
+        line(2, 5, 2, 3)
+        line(2, 3, 7, 3)
+        line(7, 3, 9, 5)
+        if name == "Open" then
+            line(3, 12, 5, 8)
+            line(5, 8, 13, 8)
+        end
+    elseif name == "Save" then
+        rect(2, 2, 12, 12)
+        rect(5, 2, 6, 4, 1)
+        rect(5, 9, 6, 5, 1)
+    elseif name == "Preview" then
+        line(5, 3, 13, 8)
+        line(13, 8, 5, 13)
+        line(5, 13, 5, 3)
+    elseif name == "Export" then
+        line(8, 2, 8, 10)
+        line(5, 5, 8, 2)
+        line(8, 2, 11, 5)
+        line(2, 10, 2, 14)
+        line(2, 14, 14, 14)
+        line(14, 14, 14, 10)
+    elseif name == "Minimize" then
+        line(4, 8, 12, 8)
+    elseif name == "Close" then
+        line(4, 4, 12, 12)
+        line(12, 4, 4, 12)
+    elseif name == "Plus" then
+        line(8, 3, 8, 13)
+        line(3, 8, 13, 8)
+    elseif name == "Check" or name == "Checkbox" then
+        if name == "Checkbox" then
+            rect(2, 2, 12, 12)
+        end
+        line(4, 8, 7, 11)
+        line(7, 11, 12, 5)
+    elseif name == "Toggle" then
+        rect(1, 5, 14, 7, 4)
+        dot(11, 8.5, 2)
+    elseif name == "Slider" or name == "Properties" then
+        for index, x in ipairs({ 5, 11, 7 }) do
+            local y = index * 4
+            line(2, y, x - 2, y)
+            line(x + 2, y, 14, y)
+            dot(x, y, 1.7)
+        end
+    elseif name == "Input" then
+        rect(1, 4, 14, 9)
+        line(6, 6, 6, 11)
+        line(4, 6, 8, 6)
+        line(4, 11, 8, 11)
+    elseif name == "Dropdown" then
+        rect(2, 3, 12, 10)
+        line(5, 7, 8, 10)
+        line(8, 10, 11, 7)
+    elseif name == "Button" then
+        rect(2, 3, 12, 10)
+        line(7, 5.5, 10, 8)
+        line(10, 8, 7, 10.5)
+    elseif name == "KeyPicker" then
+        rect(1, 4, 14, 9)
+        line(4, 7, 5, 7)
+        line(8, 7, 9, 7)
+        line(11, 7, 12, 7)
+        line(5, 10, 11, 10)
+    elseif name == "ColorPicker" or name == "Theme" then
+        rect(2, 2, 12, 12, 7)
+        dot(5, 6, 0.8)
+        dot(8, 4.5, 0.8)
+        dot(11, 6, 0.8)
+        dot(5, 9.5, 0.8)
+        rect(9, 9, 4, 4, 2)
+    elseif name == "Label" or name == "Style" then
+        line(3, 3, 13, 3)
+        line(8, 3, 8, 13)
+        line(5, 13, 11, 13)
+    elseif name == "Paragraph" then
+        line(2, 4, 14, 4)
+        line(2, 8, 14, 8)
+        line(2, 12, 10, 12)
+    elseif name == "Image" then
+        rect(2, 2, 12, 12)
+        line(3, 12, 7, 8)
+        line(7, 8, 13, 13)
+        dot(10.5, 5.5, 1)
+    elseif name == "Divider" then
+        line(2, 8, 14, 8)
+    elseif name == "Copy" or name == "Duplicate" then
+        rect(5, 5, 9, 9)
+        line(3, 11, 2, 11)
+        line(2, 11, 2, 2)
+        line(2, 2, 11, 2)
+        line(11, 2, 11, 3)
+    elseif name == "Delete" then
+        rect(4, 5, 8, 9, 1)
+        line(3, 4, 13, 4)
+        line(6, 2, 10, 2)
+        line(6.5, 7, 6.5, 12)
+        line(9.5, 7, 9.5, 12)
+    elseif name == "Up" or name == "Down" then
+        local a, b = name == "Up" and 10 or 6, name == "Up" and 5 or 11
+        line(3, a, 8, b)
+        line(8, b, 13, a)
+    elseif name == "Reset" then
+        line(3, 6, 5, 3)
+        line(5, 3, 11, 3)
+        line(11, 3, 14, 6)
+        line(14, 6, 14, 11)
+        line(14, 11, 11, 14)
+        line(11, 14, 5, 14)
+        line(5, 14, 2, 11)
+        line(2, 4, 3, 7)
+        line(3, 7, 6, 6)
+    elseif name == "Vortex" then
+        line(2, 3, 8, 13, 2)
+        line(8, 13, 14, 3, 2)
+    else
+        rect(2, 3, 12, 10)
+        line(2, 6, 14, 6)
+    end
+    return root,
+        function(value)
+            for _, part in ipairs(parts) do
+                animate(part[1], { [part[2]] = value })
+            end
+        end
+end
+
+local iconNames = {
+    ["+ Tab"] = "Plus",
+    ["+ Group"] = "Plus",
+    ["−"] = "Minimize",
+    ["×"] = "Close",
+    ["✓"] = "Check",
+    ["Move up"] = "Up",
+    ["Move down"] = "Down",
+    ["Reset view"] = "Reset",
+    ["Save file"] = "Save",
+    ["Load file"] = "Open",
+    ["Keybind"] = "KeyPicker",
+    ["Color"] = "ColorPicker",
+    ["V"] = "Vortex",
+}
+
+local function setSelected(object, selected)
+    object:SetAttribute("Selected", selected == true)
+    animate(object, {
+        BackgroundColor3 = selected and palette.Selected
+            or object:GetAttribute("Flat") and palette.Surface
+            or palette.Field,
+        TextColor3 = selected and palette.Accent or palette.Muted,
+        BackgroundTransparency = object:GetAttribute("Quiet") and not selected and 1 or 0,
+    })
+end
+
+local function button(parent, caption, position, size, callback, accent, iconName, iconOnly)
+    iconName = iconName
+        or iconNames[caption]
+        or ({
+                Undo = true,
+                Redo = true,
+                New = true,
+                Open = true,
+                Save = true,
+                Preview = true,
+                Export = true,
+                Window = true,
+                Properties = true,
+                Theme = true,
+                Style = true,
+                Copy = true,
+                Duplicate = true,
+                Delete = true,
+                Toggle = true,
+                Checkbox = true,
+                Slider = true,
+                Input = true,
+                Dropdown = true,
+                Button = true,
+                Label = true,
+                Paragraph = true,
+                Image = true,
+                Divider = true,
+            })[caption]
+            and caption
+    iconOnly = iconOnly or caption == "−" or caption == "×" or caption == "✓" or caption == "V"
     local object = make("TextButton", {
         Name = caption,
         Text = caption,
@@ -74,16 +369,79 @@ local function button(parent, caption, position, size, callback, accent)
         AutoButtonColor = false,
         BorderSizePixel = 0,
         BackgroundColor3 = accent and palette.Selected or palette.Field,
-        TextColor3 = accent and palette.Accent or palette.Text,
+        TextColor3 = accent and palette.Accent or palette.Muted,
         TextSize = 12,
-        Font = Enum.Font.GothamMedium,
+        FontFace = Font.new("rbxassetid://12187365364", Enum.FontWeight.Medium),
     }, parent)
-    corner(object, 6)
+    object:SetAttribute("Selected", accent == true)
+    local tooltip
+    if iconName then
+        object.TextTransparency = 1
+        local glyph, tint = icon(
+            object,
+            iconName,
+            iconOnly and UDim2.new(0.5, -8, 0.5, -8) or UDim2.new(0, 9, 0.5, -8),
+            object.TextColor3
+        )
+        if not iconOnly then
+            local label = text(object, caption, UDim2.fromOffset(31, 0), UDim2.new(1, -36, 1, 0), object.TextColor3, 11)
+            label.Name = "Caption"
+            object:GetPropertyChangedSignal("Text"):Connect(function()
+                label.Text = object.Text
+            end)
+            object:GetPropertyChangedSignal("TextColor3"):Connect(function()
+                label.TextColor3 = object.TextColor3
+            end)
+        elseif caption ~= "✓" and caption ~= "V" then
+            local hint = caption == "×" and "Close" or caption == "−" and "Minimize" or caption
+            tooltip = text(
+                object,
+                hint,
+                UDim2.new(0.5, 0, 1, 7),
+                UDim2.fromOffset(math.max(54, #hint * 7 + 18), 25),
+                palette.Text,
+                11
+            )
+            tooltip.Name, tooltip.AnchorPoint, tooltip.Visible, tooltip.ZIndex =
+                "Tooltip", Vector2.new(0.5, 0), false, 120
+            tooltip.BackgroundColor3, tooltip.BackgroundTransparency = palette.Field, 0.02
+            tooltip.TextXAlignment = Enum.TextXAlignment.Center
+            corner(tooltip, 5)
+            outline(tooltip)
+        end
+        object:GetPropertyChangedSignal("TextColor3"):Connect(function()
+            tint(object.TextColor3)
+        end)
+        glyph.Name = "Icon_" .. iconName
+    end
+    corner(object, (caption == "−" or caption == "×") and 14 or 6)
     object.MouseEnter:Connect(function()
-        object.BackgroundColor3 = palette.Selected
+        animate(object, { BackgroundColor3 = palette.Hover, TextColor3 = palette.Accent, BackgroundTransparency = 0 })
+        if tooltip then
+            tooltip.Visible = true
+        end
     end)
     object.MouseLeave:Connect(function()
-        object.BackgroundColor3 = accent and palette.Selected or palette.Field
+        setSelected(object, object:GetAttribute("Selected"))
+        if tooltip then
+            tooltip.Visible = false
+        end
+    end)
+    object.InputBegan:Connect(function(event)
+        if
+            event.UserInputType == Enum.UserInputType.MouseButton1
+            or event.UserInputType == Enum.UserInputType.Touch
+        then
+            animate(object, { BackgroundColor3 = palette.Border }, 0.06)
+        end
+    end)
+    object.InputEnded:Connect(function(event)
+        if
+            event.UserInputType == Enum.UserInputType.MouseButton1
+            or event.UserInputType == Enum.UserInputType.Touch
+        then
+            setSelected(object, object:GetAttribute("Selected"))
+        end
     end)
     if callback then
         object.Activated:Connect(callback)
@@ -101,7 +459,7 @@ local function input(parent, value, position, size, multiline)
         BorderSizePixel = 0,
         TextColor3 = palette.Text,
         PlaceholderColor3 = palette.Muted,
-        Font = Enum.Font.Gotham,
+        FontFace = Font.new("rbxassetid://12187365364", Enum.FontWeight.Medium),
         TextSize = 12,
         ClearTextOnFocus = false,
         MultiLine = multiline == true,
@@ -135,6 +493,7 @@ local function scroll(parent, name, position, size)
 end
 
 local function clear(parent)
+    cancelTree(parent)
     for _, child in ipairs(parent:GetChildren()) do
         child:Destroy()
     end
@@ -243,19 +602,9 @@ function Designer:RenderOutline()
         local selected = key == self.Model.Selection
         local object = button(self.Tree, "", UDim2.fromOffset(8, y), UDim2.new(1, -19, 0, 30), nil)
         object.Name = "Item_" .. key
-        object.BackgroundColor3 = selected and palette.Selected or palette.Surface
-        object.MouseLeave:Connect(function()
-            object.BackgroundColor3 = key == self.Model.Selection and palette.Selected or palette.Surface
-        end)
-        local marker = kind == "Window" and "◈" or kind == "Tab" and "▤" or kind == "Group" and "▢" or "·"
-        text(
-            object,
-            marker,
-            UDim2.fromOffset(8 + depth * 13, 0),
-            UDim2.fromOffset(19, 30),
-            selected and palette.Accent or palette.Muted,
-            14
-        )
+        object:SetAttribute("Flat", true)
+        setSelected(object, selected)
+        icon(object, kind, UDim2.fromOffset(8 + depth * 13, 7), selected and palette.Accent or palette.Muted)
         text(
             object,
             caption,
@@ -304,8 +653,8 @@ function Designer:RenderInspector()
     clear(self.Properties)
     self.PropertyInputs = {}
     for name, object in pairs(self.InspectorButtons) do
-        object.TextColor3 = name == self.InspectorMode and palette.Accent or palette.Muted
-        object.BackgroundColor3 = name == self.InspectorMode and palette.Selected or palette.Surface
+        object:SetAttribute("Flat", true)
+        setSelected(object, name == self.InspectorMode)
     end
     local selectedKey = self.Model.Selection
     local node = self.Model:Get(selectedKey)
@@ -347,6 +696,7 @@ function Designer:RenderInspector()
                 end,
                 value
             )
+            outline(toggle)
             self.PropertyInputs[item.Key] = toggle
             y += 38
         else
@@ -382,6 +732,11 @@ function Designer:RenderInspector()
                 if item.Type == "Color" then
                     border.Color = Color3.fromHex(value)
                 end
+                local restingColor = border.Color
+                box.Focused:Connect(function()
+                    animate(border, { Color = palette.Muted }, 0.16)
+                    animate(box, { BackgroundColor3 = palette.Selected }, 0.16)
+                end)
                 box.FocusLost:Connect(function()
                     if self.Destroyed then
                         return
@@ -406,6 +761,9 @@ function Designer:RenderInspector()
                     if not same and not self:_change(selectedKey, item.Key, nextValue, section) then
                         box.Text = rendered
                         border.Color = palette.Error
+                    elseif same then
+                        animate(border, { Color = restingColor }, 0.16)
+                        animate(box, { BackgroundColor3 = palette.Field }, 0.16)
                     end
                 end)
                 y += multiline and 100 or 44
@@ -579,7 +937,7 @@ end
 function Designer:SetTesting(value)
     self.Testing = value == true
     self.TestButton.Text = self.Testing and "Editing" or "Preview"
-    self.TestButton.BackgroundColor3 = self.Testing and palette.Selected or palette.Field
+    setSelected(self.TestButton, self.Testing)
     self:RenderPreview()
 end
 
@@ -609,6 +967,7 @@ end
 
 function Designer:_closeModal()
     if self.Modal then
+        cancelTree(self.Modal)
         self.Modal:Destroy()
         self.Modal = nil
     end
@@ -628,7 +987,9 @@ function Designer:_modal(title)
         BorderSizePixel = 0,
         ZIndex = 100,
     }, self.Root)
-    local panel = frame(overlay, "Panel", UDim2.fromScale(0.5, 0.5), UDim2.fromOffset(780, 570), palette.Surface)
+    local panel =
+        frame(overlay, "Panel", UDim2.new(0.5, 0, 0.5, 12), UDim2.fromOffset(780, 570), palette.Surface, "CanvasGroup")
+    panel.GroupTransparency = 1
     panel.AnchorPoint, panel.ZIndex = Vector2.new(0.5, 0.5), 101
     corner(panel, 10)
     outline(panel)
@@ -637,6 +998,9 @@ function Designer:_modal(title)
         self:_closeModal()
     end)
     self.Modal = overlay
+    overlay.BackgroundTransparency = 1
+    animate(overlay, { BackgroundTransparency = 0.35 }, 0.18)
+    animate(panel, { Position = UDim2.fromScale(0.5, 0.5), GroupTransparency = 0 }, 0.18)
     return panel
 end
 
@@ -782,6 +1146,8 @@ function Designer:Destroy()
         return
     end
     self.Destroyed = true
+    self.WindowDrag = nil
+    cancelTree(self.Gui)
     self:_clearPreview()
     for _, connection in ipairs(self.Connections) do
         connection:Disconnect()
@@ -791,13 +1157,103 @@ function Designer:Destroy()
 end
 
 function Designer:Close()
+    local function dismiss()
+        if self.Closing then
+            return
+        end
+        self.Closing, self.WindowDrag = true, nil
+        animate(self.Root, { GroupTransparency = 1 }, 0.12)
+        task.delay(0.12, function()
+            if not self.Destroyed then
+                self:Destroy()
+            end
+        end)
+    end
     if self.Dirty then
         self:_confirm("Close designer", function()
-            self:Destroy()
+            dismiss()
         end)
     else
-        self:Destroy()
+        dismiss()
     end
+end
+
+function Designer:_clampPosition(value)
+    local viewport = self.Gui.AbsoluteSize
+    local half = Vector2.new(640 * self.Scale.Scale, 380 * self.Scale.Scale)
+    local minX, minY = math.min(half.X + 8, viewport.X / 2), math.min(half.Y + 8, viewport.Y / 2)
+    return UDim2.fromOffset(
+        math.clamp(value.X, minX, math.max(minX, viewport.X - half.X - 8)),
+        math.clamp(value.Y, minY, math.max(minY, viewport.Y - half.Y - 8))
+    )
+end
+
+function Designer:_beginWindowDrag(event)
+    if self.Modal or self.Closing or self.WindowDrag or not self.Root.Visible then
+        return
+    end
+    if event.UserInputType ~= Enum.UserInputType.MouseButton1 and event.UserInputType ~= Enum.UserInputType.Touch then
+        return
+    end
+    cancelMotion(self.Root, "Position")
+    local position, viewport = self.Root.Position, self.Gui.AbsoluteSize
+    self.WindowDrag = {
+        Input = event,
+        Start = Vector2.new(event.Position.X, event.Position.Y),
+        Center = Vector2.new(
+            position.X.Scale * viewport.X + position.X.Offset,
+            position.Y.Scale * viewport.Y + position.Y.Offset
+        ),
+    }
+end
+
+function Designer:_moveWindowDrag(event)
+    local drag = self.WindowDrag
+    if not drag then
+        return
+    end
+    if
+        event ~= drag.Input
+        and not (
+            drag.Input.UserInputType == Enum.UserInputType.MouseButton1
+            and event.UserInputType == Enum.UserInputType.MouseMovement
+        )
+    then
+        return
+    end
+    local delta = Vector2.new(event.Position.X, event.Position.Y) - drag.Start
+    animate(self.Root, { Position = self:_clampPosition(drag.Center + delta) }, 0.06)
+end
+
+function Designer:Minimize()
+    if self.Closing or not self.Root.Visible then
+        return
+    end
+    self.VisibilityToken += 1
+    local token = self.VisibilityToken
+    self.WindowDrag = nil
+    cancelMotion(self.Root, "Position")
+    self.HiddenPosition = self.Root.Position
+    animate(self.Root, { GroupTransparency = 1 }, 0.12)
+    task.delay(0.12, function()
+        if not self.Destroyed and token == self.VisibilityToken then
+            self.Root.Visible, self.Restore.Visible = false, true
+        end
+    end)
+end
+
+function Designer:RestoreWindow()
+    if self.Destroyed or self.Closing then
+        return
+    end
+    self.VisibilityToken += 1
+    local saved, viewport = self.HiddenPosition or self.Root.Position, self.Gui.AbsoluteSize
+    local position = self:_clampPosition(
+        Vector2.new(saved.X.Scale * viewport.X + saved.X.Offset, saved.Y.Scale * viewport.Y + saved.Y.Offset)
+    )
+    self.Root.Position = UDim2.new(position.X.Scale, position.X.Offset, position.Y.Scale, position.Y.Offset + 10)
+    self.Root.Visible, self.Restore.Visible = true, false
+    animate(self.Root, { GroupTransparency = 0, Position = position }, 0.18)
 end
 
 function Designer:_buildUI(parent)
@@ -818,32 +1274,60 @@ function Designer:_buildUI(parent)
             self.Gui.Parent = Players.LocalPlayer:WaitForChild("PlayerGui")
         end
     end
-    self.Root = frame(self.Gui, "Designer", UDim2.fromScale(0.5, 0.5), UDim2.fromOffset(1280, 760), palette.Background)
+    self.Root = frame(
+        self.Gui,
+        "Designer",
+        UDim2.fromScale(0.5, 0.5),
+        UDim2.fromOffset(1280, 760),
+        palette.Background,
+        "CanvasGroup"
+    )
     self.Root.AnchorPoint = Vector2.new(0.5, 0.5)
-    corner(self.Root, 12)
+    self.Root.GroupTransparency = 1
+    corner(self.Root, 10)
     outline(self.Root)
     self.Scale = make("UIScale", { Scale = 1 }, self.Root)
     local function fit()
         local size = self.Gui.AbsoluteSize
         self.Scale.Scale = math.max(0.1, math.min(1, (size.X - 24) / 1280, (size.Y - 24) / 760))
+        if self.Root.Position.X.Scale == 0 and self.Root.Position.Y.Scale == 0 then
+            self.Root.Position =
+                self:_clampPosition(Vector2.new(self.Root.Position.X.Offset, self.Root.Position.Y.Offset))
+        end
+        self:_fitPreview()
     end
     self:_connect(self.Gui:GetPropertyChangedSignal("AbsoluteSize"), fit)
     fit()
     local header = frame(self.Root, "Header", UDim2.new(), UDim2.new(1, 0, 0, 56), palette.Background)
-    text(header, "V", UDim2.fromOffset(20, 13), UDim2.fromOffset(24, 30), palette.Accent, 24).Font =
-        Enum.Font.GothamBold
-    text(header, "Vortex Designer", UDim2.fromOffset(54, 12), UDim2.fromOffset(164, 32), palette.Text, 16)
-    self.ProjectTitle = text(header, "", UDim2.fromOffset(232, 12), UDim2.fromOffset(310, 32), palette.Muted)
-    self.UndoButton = button(header, "Undo", UDim2.new(1, -666, 0, 13), UDim2.fromOffset(62, 30), function()
+    header.ZIndex = 5
+    self.DragHandle = make("TextButton", {
+        Name = "DragHandle",
+        Text = "",
+        BackgroundTransparency = 1,
+        AutoButtonColor = false,
+        BorderSizePixel = 0,
+        Size = UDim2.new(1, -532, 1, 0),
+        Active = true,
+    }, header)
+    self.DragHandle.InputBegan:Connect(function(event)
+        self:_beginWindowDrag(event)
+    end)
+    icon(header, "Vortex", UDim2.fromOffset(22, 20), palette.Accent)
+    local brand = text(header, "vortex", UDim2.fromOffset(50, 10), UDim2.fromOffset(78, 34), palette.Text, 20)
+    brand.FontFace = Font.new("rbxassetid://12187365364", Enum.FontWeight.SemiBold)
+    text(header, "designer", UDim2.fromOffset(132, 12), UDim2.fromOffset(76, 32), palette.Muted, 11)
+    self.ProjectTitle = text(header, "", UDim2.fromOffset(234, 12), UDim2.fromOffset(390, 32), palette.Muted, 11)
+    self.UndoButton = button(header, "Undo", UDim2.new(1, -520, 0, 13), UDim2.fromOffset(32, 30), function()
         self:Undo()
-    end)
-    self.RedoButton = button(header, "Redo", UDim2.new(1, -596, 0, 13), UDim2.fromOffset(62, 30), function()
+    end, false, "Undo", true)
+    self.RedoButton = button(header, "Redo", UDim2.new(1, -480, 0, 13), UDim2.fromOffset(32, 30), function()
         self:Redo()
-    end)
-    button(header, "New", UDim2.new(1, -514, 0, 13), UDim2.fromOffset(58, 30), function()
+    end, false, "Redo", true)
+    frame(header, "ToolbarDivider", UDim2.new(1, -434, 0, 20), UDim2.fromOffset(1, 16), palette.Border)
+    button(header, "New", UDim2.new(1, -418, 0, 13), UDim2.fromOffset(32, 30), function()
         self:New()
-    end)
-    button(header, "Open", UDim2.new(1, -448, 0, 13), UDim2.fromOffset(62, 30), function()
+    end, false, "New", true)
+    button(header, "Open", UDim2.new(1, -378, 0, 13), UDim2.fromOffset(32, 30), function()
         if self.Dirty then
             self:_confirm("Open project", function()
                 self:ShowImport()
@@ -851,23 +1335,34 @@ function Designer:_buildUI(parent)
         else
             self:ShowImport()
         end
-    end)
-    button(header, "Save", UDim2.new(1, -378, 0, 13), UDim2.fromOffset(62, 30), function()
+    end, false, "Open", true)
+    button(header, "Save", UDim2.new(1, -338, 0, 13), UDim2.fromOffset(32, 30), function()
         self:ShowExport("Project")
-    end)
-    self.TestButton = button(header, "Preview", UDim2.new(1, -296, 0, 13), UDim2.fromOffset(84, 30), function()
+    end, false, "Save", true)
+    self.TestButton = button(header, "Preview", UDim2.new(1, -294, 0, 13), UDim2.fromOffset(90, 30), function()
         self:SetTesting(not self.Testing)
     end)
-    button(header, "Export", UDim2.new(1, -204, 0, 13), UDim2.fromOffset(84, 30), function()
+    button(header, "Export", UDim2.new(1, -196, 0, 13), UDim2.fromOffset(94, 30), function()
         self:ShowExport()
     end, true)
-    button(header, "−", UDim2.new(1, -92, 0, 13), UDim2.fromOffset(30, 30), function()
-        self.Root.Visible = false
-        self.Restore.Visible = true
+    button(header, "−", UDim2.new(1, -88, 0, 13), UDim2.fromOffset(28, 30), function()
+        self:Minimize()
     end)
-    button(header, "×", UDim2.new(1, -54, 0, 13), UDim2.fromOffset(30, 30), function()
+    button(header, "×", UDim2.new(1, -50, 0, 13), UDim2.fromOffset(28, 30), function()
         self:Close()
     end)
+    for _, child in ipairs(header:GetChildren()) do
+        if
+            child:IsA("TextButton")
+            and child ~= self.DragHandle
+            and child ~= self.TestButton
+            and child.Name ~= "Export"
+        then
+            child:SetAttribute("Flat", true)
+            child:SetAttribute("Quiet", true)
+            setSelected(child, false)
+        end
+    end
     frame(self.Root, "Divider", UDim2.fromOffset(12, 55), UDim2.new(1, -24, 0, 1), palette.Border)
     local left = frame(self.Root, "Outline", UDim2.fromOffset(12, 68), UDim2.new(0, 214, 1, -108))
     corner(left, 8)
@@ -903,15 +1398,10 @@ function Designer:_buildUI(parent)
     button(center, "Reset view", UDim2.new(1, -91, 0, 0), UDim2.fromOffset(86, 28), function()
         self:RenderPreview()
     end)
-    self.Stage = frame(center, "Stage", UDim2.fromOffset(0, 40), UDim2.new(1, 0, 1, -40), Color3.fromRGB(18, 19, 23))
+    self.Stage = frame(center, "Stage", UDim2.fromOffset(0, 40), UDim2.new(1, 0, 1, -40), Color3.fromRGB(11, 11, 11))
     self.Stage.ClipsDescendants = true
     corner(self.Stage, 8)
-    for x = 24, 750, 24 do
-        for y = 24, 600, 24 do
-            local dot = frame(self.Stage, "Dot", UDim2.fromOffset(x, y), UDim2.fromOffset(1, 1), palette.Border)
-            dot.BackgroundTransparency = 0.5
-        end
-    end
+    outline(self.Stage, Color3.fromRGB(27, 27, 27))
     self:_connect(self.Stage:GetPropertyChangedSignal("AbsoluteSize"), function()
         self:_fitPreview()
     end)
@@ -922,8 +1412,8 @@ function Designer:_buildUI(parent)
         self.InspectorButtons[name] = button(
             right,
             name,
-            UDim2.fromOffset(10 + (index - 1) * 82, 10),
-            UDim2.fromOffset(78, 30),
+            UDim2.fromOffset(({ 10, 112, 186 })[index], 10),
+            UDim2.fromOffset(({ 98, 70, 66 })[index], 30),
             function()
                 self.InspectorMode = name
                 self:RenderInspector()
@@ -932,16 +1422,8 @@ function Designer:_buildUI(parent)
     end
     self.Properties = scroll(right, "Properties", UDim2.fromOffset(0, 50), UDim2.new(1, 0, 1, -50))
     self.Status = text(self.Root, "", UDim2.new(0, 20, 1, -32), UDim2.new(1, -380, 0, 24), palette.Muted, 11)
-    text(
-        self.Root,
-        "Ctrl+Z   Undo      Ctrl+Shift+Z   Redo",
-        UDim2.new(1, -296, 1, -32),
-        UDim2.fromOffset(276, 24),
-        palette.Muted,
-        10
-    )
     self.Restore = button(self.Gui, "V", UDim2.fromOffset(22, 104), UDim2.fromOffset(48, 48), function()
-        self.Root.Visible, self.Restore.Visible = true, false
+        self:RestoreWindow()
     end, true)
     self.Restore.Visible = false
     self.Restore.TextSize = 24
@@ -950,6 +1432,7 @@ function Designer:_buildUI(parent)
     self.DragLabel.Visible, self.DragLabel.ZIndex = false, 90
     corner(self.DragLabel, 5)
     self:_connect(UIS.InputChanged, function(event)
+        self:_moveWindowDrag(event)
         local drag = self.Drag
         if
             not drag
@@ -998,6 +1481,17 @@ function Designer:_buildUI(parent)
         end
     end)
     self:_connect(UIS.InputEnded, function(event)
+        local windowDrag = self.WindowDrag
+        if
+            windowDrag
+            and (
+                event == windowDrag.Input
+                or event.UserInputType == Enum.UserInputType.MouseButton1
+                    and windowDrag.Input.UserInputType == Enum.UserInputType.MouseButton1
+            )
+        then
+            self.WindowDrag = nil
+        end
         local drag = self.Drag
         if
             not drag
@@ -1082,11 +1576,15 @@ function Designer:Create(options)
         InspectorMode = "Properties",
         Testing = false,
         Dirty = false,
+        VisibilityToken = 0,
         SuppressClickUntil = 0,
     }, Designer)
     local ok, err = pcall(function()
         self:_buildUI(options.Parent)
         self:Render()
+        local position = self.Root.Position
+        self.Root.Position = UDim2.new(position.X.Scale, position.X.Offset, position.Y.Scale, position.Y.Offset + 10)
+        animate(self.Root, { GroupTransparency = 0, Position = position }, 0.22)
     end)
     if not ok then
         self.Destroyed = true

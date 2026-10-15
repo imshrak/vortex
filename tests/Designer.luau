@@ -125,6 +125,54 @@ editor:_fitPreview()
 verify(editor.PreviewWindow.Scale.Scale == 1, "Small screens should scale the preview only once")
 editor.Scale.Scale = 1
 editor.Stage.AbsoluteSize = Vector2.new(756, 612)
+verify(editor.Root.BackgroundColor3:ToHex() == "0f0f0f", "Designer should match Vortex graphite")
+verify(editor.UndoButton:FindFirstChild("Icon_Undo") ~= nil, "Toolbar actions should expose line icons")
+local originalViewport = editor.Gui.AbsoluteSize
+editor.Gui.AbsoluteSize = Vector2.new(2000, 1400)
+editor.Root.Position = UDim2.fromScale(0.5, 0.5)
+local pointer = { UserInputType = Enum.UserInputType.MouseButton1, Position = Vector2.new(200, 100) }
+editor.DragHandle.InputBegan:Fire(pointer)
+UIS.InputChanged:Fire({ UserInputType = Enum.UserInputType.MouseMovement, Position = Vector2.new(260, 145) })
+verify(
+    editor.Root.Position.X.Offset == 1060 and editor.Root.Position.Y.Offset == 745,
+    "Header dragging should follow the pointer in screen coordinates"
+)
+UIS.InputEnded:Fire(pointer)
+verify(editor.WindowDrag == nil, "Releasing the pointer should end window dragging")
+local touch = { UserInputType = Enum.UserInputType.Touch, Position = Vector2.new(260, 145) }
+editor.DragHandle.InputBegan:Fire(touch)
+touch.Position = Vector2.new(280, 160)
+UIS.InputChanged:Fire(touch)
+verify(
+    editor.Root.Position.X.Offset == 1080 and editor.Root.Position.Y.Offset == 760,
+    "Touch should move the designer without double scaling"
+)
+touch.Position = Vector2.new(9000, 9000)
+UIS.InputChanged:Fire(touch)
+verify(
+    editor.Root.Position.X.Offset == 1352 and editor.Root.Position.Y.Offset == 1012,
+    "Dragging should keep the whole editor inside the viewport"
+)
+UIS.InputEnded:Fire(touch)
+editor:Minimize()
+local minimize = delayed[#delayed]
+minimize()
+verify(not editor.Root.Visible and editor.Restore.Visible, "Minimize should leave a restore button")
+editor:RestoreWindow()
+verify(
+    editor.Root.Visible and not editor.Restore.Visible and editor.Root.GroupTransparency == 0,
+    "Restore should reveal the editor"
+)
+editor:Minimize()
+minimize = delayed[#delayed]
+editor:RestoreWindow()
+minimize()
+verify(editor.Root.Visible, "Old minimize transitions must not hide a restored editor")
+editor:_modal("Test")
+editor.DragHandle.InputBegan:Fire(pointer)
+verify(editor.WindowDrag == nil, "Modal dialogs should prevent background dragging")
+editor:_closeModal()
+editor.Gui.AbsoluteSize = originalViewport
 editor:Select("n3")
 editor.PropertyInputs.Text.Text = "Custom toggle"
 editor.PropertyInputs.Text.FocusLost:Fire()
