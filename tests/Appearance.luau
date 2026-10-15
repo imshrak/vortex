@@ -17,22 +17,31 @@ local function verifyAppearance(library, window, group, toggle, slider, input, d
     expect(position(window.Subtitle, 0, 124, 0, 8), "Subtitle must use the reference header inset")
     expect(position(window.Navigation, 0, 16, 0, 57), "Navigation must start at the reference position")
     expect(window.Navigation.Size.Y.Offset == 34, "Navigation must be 34 pixels tall")
-    expect(position(window.CloseButton, 1, -40, 0, 13), "Close button must align to the top right")
-    expect(position(window.MinimizeButton, 1, -72, 0, 13), "Minimize button must sit beside close")
+    expect(position(window.CloseButton, 1, -40, 0, 11), "Close button must align to the top right")
+    expect(position(window.MinimizeButton, 1, -72, 0, 11), "Minimize button must sit beside close")
+    expect(position(window.SettingsButton, 1, -104, 0, 11), "Settings must be grouped beside minimize")
     expect(
-        window.CloseButton.Size.X.Offset == 24 and window.CloseButton.Size.Y.Offset == 24,
-        "Header buttons must be 24-pixel squares"
-    )
-    expect(window.CloseButton.BackgroundColor3 == Color3.fromRGB(255, 95, 87), "Close button must be red")
-    expect(window.MinimizeButton.BackgroundColor3 == Color3.fromRGB(255, 189, 46), "Minimize button must be yellow")
-    expect(
-        window.CloseButton.Text == "×" and window.MinimizeButton.Text == "−",
-        "Header buttons must display clear action icons"
+        window.CloseButton.Size.X.Offset == 28 and window.CloseButton.Size.Y.Offset == 28,
+        "Header buttons must have comfortable 28-pixel targets"
     )
     expect(
-        window.CloseButton:FindFirstChildOfClass("UICorner").CornerRadius.Offset == 4,
-        "Header buttons must have slightly rounded square corners"
+        window.CloseButton.BackgroundColor3 == library.Theme.Surface,
+        "Header controls must use neutral theme colors"
     )
+    expect(window.CloseButton.BackgroundTransparency == 1, "Header controls must be unfilled at rest")
+    expect(
+        window.CloseButton:FindFirstChildOfClass("Frame").Rotation == 45
+            and window.MinimizeButton:FindFirstChildOfClass("Frame").Rotation == 0,
+        "Header actions must use thin cross and minus icons"
+    )
+    expect(
+        window.CloseButton:FindFirstChildOfClass("UICorner").CornerRadius.Offset == 14,
+        "Header hover surfaces must be circular"
+    )
+    window.CloseButton.MouseEnter:Fire()
+    expect(window.CloseButton.BackgroundTransparency == 0.2, "Hover should reveal a subtle background")
+    window.CloseButton.MouseLeave:Fire()
+    expect(window.CloseButton.BackgroundTransparency == 1, "Leaving should restore an unfilled icon")
     local actionCount = 0
     for _, child in ipairs(window.CloseButton.Parent:GetChildren()) do
         if child.Name == "Close" or child.Name == "Minimize" or child.Name == "Maximize" then

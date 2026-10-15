@@ -208,6 +208,8 @@ function Instance.new(class)
         BackgroundTransparency = 0,
         Visible = true,
         Activated = signal(),
+        MouseEnter = signal(),
+        MouseLeave = signal(),
         InputBegan = signal(),
         FocusLost = signal(),
         Text = "",

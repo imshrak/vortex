@@ -12,7 +12,7 @@ local Library = loadstring(game:HttpGet("https://raw.githubusercontent.com/imshr
 local Window = Library:CreateWindow({
     Title = "vortex",
     Subtitle = "by shrak.",
-    Footer = "v1.1.2",
+    Footer = "v1.1.3",
 })
 
 local Main = Window:AddTab("Main", "rocket")

@@ -3,7 +3,7 @@ local UIS = game:GetService("UserInputService")
 local TweenService = game:GetService("TweenService")
 
 local Library = {
-    Version = "1.1.2",
+    Version = "1.1.3",
     Options = {},
     Toggles = {},
     Unloaded = false,
@@ -1514,16 +1514,19 @@ function Library:CreateWindow(info)
     }, frame)
     local gear = button(header)
     gear.Name = "GlobalSettings"
-    gear.Position = UDim2.new(1, -129, 0, 14)
-    gear.Size = UDim2.fromOffset(22, 22)
-    make("ImageLabel", {
-        Name = "Icon_gear",
-        Position = UDim2.fromOffset(3, 3),
-        Size = UDim2.fromOffset(16, 16),
-        BackgroundTransparency = 1,
-        Image = Library.Icons.gear,
-        ImageTransparency = 0.4,
-    }, gear)
+    gear.Position = UDim2.new(1, -104, 0, 11)
+    gear.Size = UDim2.fromOffset(28, 28)
+    local gearIcon = themed(
+        make("ImageLabel", {
+            Name = "Icon_gear",
+            Position = UDim2.fromOffset(6, 6),
+            Size = UDim2.fromOffset(16, 16),
+            BackgroundTransparency = 1,
+            Image = Library.Icons.gear,
+            ImageTransparency = 0.45,
+        }, gear),
+        { ImageColor3 = "Text" }
+    )
     local globalSettings = make("Frame", {
         Name = "GlobalSettings",
         Position = UDim2.new(1, -174, 0, 44),
@@ -1614,6 +1617,7 @@ function Library:CreateWindow(info)
         NavOffset = 0,
         Size = size,
         GlobalSettings = globalSettings,
+        SettingsButton = gear,
     }, Window)
     self.Window = window
     window:SetToggleKey(info.ToggleKey or "LeftControl")
@@ -1641,23 +1645,61 @@ function Library:CreateWindow(info)
         end
         globalSettings.Visible = not globalSettings.Visible
     end)
-    for index, color in ipairs({
-        Color3.fromRGB(255, 95, 87),
-        Color3.fromRGB(255, 189, 46),
-    }) do
+    local function styleHeaderControl(controlButton, icons)
+        themed(controlButton, { BackgroundColor3 = "Surface" })
+        controlButton.BackgroundTransparency = 1
+        corner(controlButton, 14)
+        local tweens = {}
+        local function animate(target, properties)
+            if tweens[target] then
+                tweens[target]:Cancel()
+            end
+            local tween = TweenService:Create(target, TweenInfo.new(0.12), properties)
+            tweens[target] = tween
+            tween:Play()
+        end
+        local function hover(active)
+            animate(controlButton, { BackgroundTransparency = active and 0.2 or 1 })
+            for _, icon in ipairs(icons) do
+                animate(icon.Object, { [icon.Property] = active and 0.1 or 0.45 })
+            end
+        end
+        controlButton.MouseEnter:Connect(function()
+            hover(true)
+        end)
+        controlButton.MouseLeave:Connect(function()
+            hover(false)
+        end)
+    end
+    styleHeaderControl(gear, { { Object = gearIcon, Property = "ImageTransparency" } })
+    for index = 1, 2 do
         local controlButton = make("TextButton", {
             Name = index == 1 and "Close" or "Minimize",
-            Position = UDim2.new(1, -40 - (index - 1) * 32, 0, 13),
-            Size = UDim2.fromOffset(24, 24),
-            BackgroundColor3 = color,
+            Position = UDim2.new(1, -40 - (index - 1) * 32, 0, 11),
+            Size = UDim2.fromOffset(28, 28),
             BorderSizePixel = 0,
-            Text = index == 1 and "×" or "−",
-            TextSize = 18,
-            TextColor3 = Color3.fromRGB(35, 25, 20),
-            FontFace = Font.new("rbxassetid://12187365364", Enum.FontWeight.SemiBold),
+            Text = "",
             AutoButtonColor = false,
         }, header)
-        corner(controlButton, 4)
+        local icons = {}
+        for line = 1, index == 1 and 2 or 1 do
+            local icon = themed(
+                make("Frame", {
+                    Name = "Stroke" .. line,
+                    AnchorPoint = Vector2.new(0.5, 0.5),
+                    Position = UDim2.fromScale(0.5, 0.5),
+                    Size = UDim2.fromOffset(index == 1 and 12 or 10, 1),
+                    Rotation = index == 1 and (line == 1 and 45 or -45) or 0,
+                    BackgroundTransparency = 0.45,
+                    BorderSizePixel = 0,
+                    Active = false,
+                }, controlButton),
+                { BackgroundColor3 = "Text" }
+            )
+            corner(icon, 1)
+            table.insert(icons, { Object = icon, Property = "BackgroundTransparency" })
+        end
+        styleHeaderControl(controlButton, icons)
         if index == 1 then
             window.CloseButton = controlButton
             controlButton.Activated:Connect(function()
